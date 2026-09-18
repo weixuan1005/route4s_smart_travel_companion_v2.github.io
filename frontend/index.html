@@ -3407,7 +3407,7 @@ async function planAndShow(){
   /* Land on the map, not past it. The results are conditions, then the map, then the option
      list, so scrolling to the first option hides the very thing that shows the route. */
   const target = document.querySelector(".panel.cond") || document.querySelector("[data-osm-slot]")
-              || document.querySelector("[data-trip-opt]");
+              || document.querySelector("[data-trip-opt]") || document.querySelector("[data-trip-msg]");
   if (target) target.scrollIntoView({behavior: "smooth", block: "start"});
 }
 
@@ -3521,14 +3521,14 @@ function viewTrip(){
   let results = "";
   if (T.loading) results = `<div class="panel"><div class="meta">Finding routes…</div></div>`;
   else if (T.results && !T.results.length && T.planNote === "connection")
-    results = `<div class="panel"><b>You could start, but not finish.</b>
+    results = `<div class="panel" data-trip-msg><b>You could start, but not finish.</b>
       <div class="meta">Leaving at ${hm(T.planAt)} this journey needs a train that has already gone for the night. Trains run ${esc(railHoursNote())}.</div></div>`;
   else if (T.results && !T.results.length && (T.planNote === "gone" || railRunsAt(T.planAt ?? (T.when === "now" ? appNowMin() : parseHM(T.time))) === false))
-    results = `<div class="panel"><b>Nothing is running at ${hm(T.planAt ?? (T.when === "now" ? appNowMin() : parseHM(T.time)))}.</b>
+    results = `<div class="panel" data-trip-msg><b>Nothing is running at ${hm(T.planAt ?? (T.when === "now" ? appNowMin() : parseHM(T.time)))}.</b>
       <div class="meta">Trains run ${esc(railHoursNote())}${busHoursKnown() ? ", and no bus on this route is running either" : ""}. Try a time inside those hours.</div></div>`;
   else if (T.results && !T.results.length) results = samePlace(T.from, T.to)
-    ? `<div class="panel"><b>You're already there.</b><div class="meta">${esc(T.from.name)} is both the start and the destination. Pick somewhere else to go.</div></div>`
-    : `<div class="panel"><b>No route found.</b><div class="meta">Try another start or destination.</div></div>`;
+    ? `<div class="panel" data-trip-msg><b>You're already there.</b><div class="meta">${esc(T.from.name)} is both the start and the destination. Pick somewhere else to go.</div></div>`
+    : `<div class="panel" data-trip-msg><b>No route found.</b><div class="meta">Try another start or destination.</div></div>`;
   else if (T.results){
     const osrm = T.results.some(o => o.sources.includes("osrm"));
     const cm = T.conditionsMode;
