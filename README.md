@@ -357,7 +357,9 @@ Turn the routing servers off again with `docker compose down`.
    lines mean straight-line estimates; solid means real street routing.
 5. Each option lists **why**: "Busy platform at Punggol around 08:13 (High, forecast)". Tags
    like **Best for Arjun** and **Fastest** say what it was chosen for.
-6. **Start this trip** hands over to **Navigate** for turn-by-turn steps.
+6. **Start this trip** hands over to **Navigate** for turn-by-turn steps. **End trip**, at the
+   bottom of that screen, stops navigation at any point — it asks once, then returns you to
+   your plan, which is kept so you can start it again or change it.
 7. **Morning check**, at the top, tries a departure every 10 minutes across your window and
    either confirms your usual time or suggests a better one, with reasons. **My routine** sets
    the days, the window and the alert threshold.

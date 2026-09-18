@@ -686,7 +686,7 @@ const nowMin = () => { const d = new Date(); return d.getHours()*60 + d.getMinut
 const freshTrip = () => ({active:false, leg:0, progress:0, override:null, delay:null, delayShown:false, waitTicks:0, arrived:false, crowdBoost:0, feed:[], lastKey:"", lastI:-1, arrivePrompt:false});
 const initial = () => ({
   tab:"trip", budget:80, hours:7, interests:new Set(["food","culture"]),
-  itinerary:null, trip:freshTrip(), offline:false, watchAlerts:true, clockMin:nowMin(),
+  itinerary:null, trip:freshTrip(), offline:false, watchAlerts:true, clockMin:nowMin(), confirmEnd:false,
   mapLabels:false, showStations:true, watchPage:0, dayDone:0, jFrom:null, jTo:null, jScroll:null, jFocus:null, jFull:false, jZoom:1.8, jFullCenter:null, busView:null, watchBus:null, watchNote:null, useTestData:null, replayAlerts:null, routine:null, check:null, mapMode: (typeof window.L !== "undefined" ? "osm" : "diagram"), mapExpanded:false, must:[], mustQuery:"", keepOrder:false, aiFill:true, reach:"city", disruption:null, lrtDisruption:null
 });
 let S = initial();
@@ -1161,7 +1161,17 @@ function viewGo(){
     <h3>Trip updates</h3>
     <ul class="feed">${S.trip.feed.slice(0,6).map(f => `<li class="${f.kind}"><span class="ic"></span><div>${esc(f.text)}<time>${f.time}</time></div></li>`).join("")}</ul>
   </div>
-  ${S.trip.arrived ? `<button class="primary" id="nextLeg">${S.trip.leg < stops.length-1 ? "Head to next stop" : "Finish day"}</button>` : ""}`;
+  ${S.trip.arrived ? `<button class="primary" id="nextLeg">${S.trip.leg < stops.length-1 ? "Head to next stop" : "Finish day"}</button>` : ""}
+  ${S.confirmEnd
+    ? `<div class="panel" role="alertdialog" aria-label="End this trip?">
+         <b>End this trip?</b>
+         <div class="meta">Navigation stops here. Your plan stays saved, so you can start it again or change it.</div>
+         <div class="btns" style="margin-top:10px">
+           <button class="primary" id="endTripYes" style="background:var(--stop)">End trip</button>
+           <button class="ghost" id="endTripNo">Keep going</button>
+         </div>
+       </div>`
+    : `<button class="ghost" id="endTrip" style="width:100%;margin-top:10px">End trip</button>`}`;
 }
 
 function viewSettings(){
@@ -2544,6 +2554,22 @@ function startTrip(){
   evaluateBreakdown(false);
   S.tab = "go"; render();
   clearInterval(timer); timer = setInterval(tick, 120);
+}
+
+function endTrip(){
+  if (!S.trip.active) return;
+  const total = S.itinerary ? S.itinerary.stops.length : 0;
+  const done = S.trip.leg;                       /* stops finished before the one abandoned */
+  clearInterval(timer); timer = null;
+  S.trip = freshTrip();                          /* the run is over; the plan is not */
+  S.confirmEnd = false;
+  S.watchPage = 0;
+  /* Back where the trip came from, so the plan is in front of you to restart or change. */
+  S.tab = S.itinerary && S.itinerary.fromTrip ? "trip" : "itinerary";
+  toast("Trip ended", done
+    ? `Stopped after ${done} of ${total} stop${total === 1 ? "" : "s"}. Your plan is still here.`
+    : "Your plan is still here if you want to start again.", "■");
+  buzzWatch(); render();
 }
 
 function nextLeg(){
@@ -4208,6 +4234,9 @@ function bind(){
   const lba = $("#legBusArrivals"); if (lba) lba.onclick = () => busLegView(current().leg);
   const kr = $("#keepRoute"); if (kr) kr.onclick = () => keepWaiting("phone");
   const nl = $("#nextLeg"); if (nl) nl.onclick = nextLeg;
+  const et = $("#endTrip"); if (et) et.onclick = () => { S.confirmEnd = true; render(); };
+  const ey = $("#endTripYes"); if (ey) ey.onclick = endTrip;
+  const en = $("#endTripNo"); if (en) en.onclick = () => { S.confirmEnd = false; render(); };
   const jsc = $("#jInline");
   if (jsc){
     enableDrag(jsc);
@@ -4231,7 +4260,9 @@ function bind(){
   const sww = $("#sWatch"); if (sww) sww.onclick = () => { S.watchAlerts = !S.watchAlerts; render(); };
 }
 
-document.querySelectorAll(".tabs button").forEach(b => b.onclick = () => { S.tab = b.dataset.tab; render(); });
+/* Leaving the tab cancels a half-asked "end this trip?" - coming back to a pending
+   confirmation you have forgotten about is how a trip gets ended by accident. */
+document.querySelectorAll(".tabs button").forEach(b => b.onclick = () => { S.tab = b.dataset.tab; S.confirmEnd = false; render(); });
 document.querySelectorAll("[data-wpage]").forEach(b => b.onclick = () => { S.watchPage = +b.dataset.wpage; renderWatch(); });
 $("#wscreen").onclick = () => { if (!watchLocked()) cycleWatch(); };
 $("#wscreen").onkeydown = e => { if (e.target !== e.currentTarget) return; if (e.key === "Enter" || e.key === " "){ e.preventDefault(); if (!watchLocked()) cycleWatch(); } };

@@ -121,6 +121,12 @@ One IIFE in `index.html`. Key parts, in order:
   bands live in `frontend/fares.json`, shipped with `bands: []`; while it is empty the app
   falls back to `FARE_EST` and tags every option **Fare estimated**. Never put guessed band
   values in that file.
+- `endTrip()` stops navigation part-way: clears the timer, `freshTrip()`s the run and returns
+  to the tab the trip came from (`S.itinerary.fromTrip` -> trip planner, else itinerary). The
+  itinerary is deliberately kept - plans change, and losing the plan for it would be
+  punishing. Guarded by `S.confirmEnd`, which a tab change clears so a forgotten half-asked
+  confirmation cannot end a trip by accident. The clock returns to real time on its own,
+  because `updateLive()` follows the device whenever no trip is active.
 - One clock, everywhere. `dayStart()` (now, rounded up to five minutes) anchors the tourist
   itinerary, which used to start at a hardcoded 10:00 while the clock beside it read the real
   time - so the watch would say "Leave by 11:35" at 14:13. `startTrip()` takes its clock from
@@ -132,7 +138,7 @@ One IIFE in `index.html`. Key parts, in order:
 
 Done: phone layout, OSM map, door-to-door planning with time ranges, live disruptions with
 bridging-bus rerouting, crowding, rain, bus arrivals, bike parking, Arjun's routine and
-morning check, live weather on screen (two-hour nowcast for both ends of the trip),
+morning check, ending a trip part-way, live weather on screen (two-hour nowcast for both ends of the trip),
 privacy panel, test-data replays, planned works (the "known in advance" half:
 `/api/planned`, shown against the route and labelled "On your route" or "Named nearby"),
 offline support (`frontend/sw.js`: shell cache-first, `/api/*` network-first with the fetch
