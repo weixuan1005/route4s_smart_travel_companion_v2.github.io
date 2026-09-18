@@ -181,12 +181,17 @@ device** in Settings removes it. The DataMall key lives in `.env`, is git-ignore
    app falls back to `S$1.09 + S$0.055/km` capped at `S$2.50`, ours not theirs, and tags
    every option **Fare estimated**.
 4. **The trip simulation is a simulation.** There is no live vehicle position feed in it.
-4a. **Train service hours are assumed, bus hours are real.** A journey outside operating
+4a. **Bus service hours are real; train hours are an envelope.** A journey outside operating
    hours is not offered. For buses that is real data — DataMall's `BusRoutes` gives first and
    last bus per service per day type, read at the service's first stop, so it is approximate
-   further down the route, and absent entirely from the no-key bus download. For trains LTA
-   publishes nothing through DataMall, so 05:30–00:30 is ours, labelled as an assumption
-   wherever the app acts on it.
+   further down the route and absent entirely from the no-key bus download. For trains there
+   is no source: LTA publishes no timetable through DataMall, and there is no network-wide
+   last train — it varies by line and by direction. So the app suppresses rail only outside
+   05:00–00:15, where nothing runs anywhere, and inside 23:15–00:15 it shows the option with
+   **Check last train** rather than guessing either way. `frontend/trainhours.json` replaces
+   the envelope with real figures when someone has them. Two public GTFS feeds claim
+   Singapore train schedules; both document their MRT timings as synthetic, so neither is
+   used.
 5. **Covered walkways are OpenStreetMap, not LTA.** `CoveredLinkWay` is authoritative and
    would be the upgrade; it ships as a shapefile download and needs different tooling.
 6. **Road works are matched to a route by name.** An event is labelled "On your route" only

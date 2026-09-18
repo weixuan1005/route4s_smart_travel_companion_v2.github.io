@@ -1488,14 +1488,52 @@ function initCovered(raw){
    is an approximation further down the route, and busdata.json built without a key (the
    BusRouter SG source) has none at all.
 
-   Trains: LTA does not publish first and last train through DataMall, so RAIL_HOURS below is
-   a stated assumption rather than data, and the app says as much wherever it acts on it.
+   Trains: there is no single network-wide last train. First trains leave termini around
+   05:00-05:30 and last trains around 23:15-00:15, and it varies by line AND by direction -
+   the last train one way can go nearly an hour before the last train the other way. LTA
+   publishes none of this through DataMall, so what follows is an envelope, not a timetable:
+
+     RAIL_HOURS      outside it, nothing is running anywhere, so no rail option is offered.
+     RAIL_LAST_BAND  inside it, the last train may already have gone on this line and in this
+                     direction. Offering the journey with a caution beats both silently
+                     hiding it and silently promising it.
+
+   frontend/trainhours.json overrides either, per line, once someone has the real figures.
 
    Unknown hours never hide anything. Suppressing a route because we lack its timetable would
    be a worse failure than showing one that has stopped.
 */
-const RAIL_HOURS = [5*60 + 30, 24*60 + 30];          /* 05:30 - 00:30, assumed, not from LTA */
-const RAIL_HOURS_NOTE = "05:30-00:30 (assumed: LTA does not publish train hours in DataMall)";
+const RAIL_HOURS = [5*60, 24*60 + 15];               /* 05:00-00:15, the outer envelope */
+const RAIL_LAST_BAND = [23*60 + 15, 24*60 + 15];     /* 23:15-00:15, last trains go somewhere in here */
+const RAIL_ENVELOPE_NOTE = "roughly 05:00-00:15, varying by line and direction (LTA publishes no train timetable through DataMall)";
+const railHoursNote = () => {
+  if (!TRAINHOURS) return RAIL_ENVELOPE_NOTE;
+  const d = TRAINHOURS.default;
+  const span = Array.isArray(d) && d.length === 2 ? `${d[0]}-${d[1]}` : "the hours in trainhours.json";
+  return `${span}${TRAINHOURS.source ? ` (${TRAINHOURS.source}${TRAINHOURS.effective ? `, ${TRAINHOURS.effective}` : ""})` : ""}`;
+};
+let TRAINHOURS = null;
+
+async function loadTrainHours(){
+  try {
+    const r = await fetch("trainhours.json", {cache:"no-cache"});
+    if (!r.ok) return;
+    const t = await r.json();
+    const usable = t && ((Array.isArray(t.default) && t.default.length === 2)
+                         || (t.lines && Object.keys(t.lines).length > 0));
+    if (!usable) return;      /* an empty file is not a timetable, and {} is truthy */
+    TRAINHOURS = t;
+    render();
+  } catch (e) { /* no file: the envelope above stands, labelled as an envelope */ }
+}
+/* Per-line if someone has filled it in, otherwise the envelope. */
+function railWindow(line){
+  const L = TRAINHOURS && TRAINHOURS.lines && line && TRAINHOURS.lines[line];
+  const D = TRAINHOURS && TRAINHOURS.default;
+  const pair = L || D;
+  if (pair && hhmmMin(pair[0]) !== null && hhmmMin(pair[1]) !== null) return [hhmmMin(pair[0]), hhmmMin(pair[1])];
+  return RAIL_HOURS;
+}
 const hhmmMin = t => { const m = /^(\d{1,2}):(\d{2})$/.exec(String(t || "").trim()); return m ? +m[1]*60 + +m[2] : null; };
 const dayKey = () => ["sun","wd","wd","wd","wd","wd","sat"][new Date().getDay()];
 
@@ -1511,7 +1549,11 @@ const svcRunsAt = (h, minute) => {
   const d = h && h[dayKey()];
   return d ? withinHours(minute, hhmmMin(d[0]), hhmmMin(d[1])) : null;
 };
-const railRunsAt = minute => withinHours(minute, RAIL_HOURS[0], RAIL_HOURS[1]);
+const railRunsAt = (minute, line) => { const w = railWindow(line); return withinHours(minute, w[0], w[1]); };
+/* True when we cannot tell whether the last train has gone. Only meaningful without real
+   per-line data: a filled-in trainhours.json makes railRunsAt authoritative instead. */
+const railLastTrainDoubt = minute =>
+  !TRAINHOURS && withinHours(minute, RAIL_LAST_BAND[0], RAIL_LAST_BAND[1]) === true;
 const busHoursKnown = () => !!(BUSDATA && BUSDATA.routes.some(rt => rt.hours));
 
 /* ---------- Fares ----------
@@ -3257,8 +3299,15 @@ async function computeOptions(p, opt){
     if (op.kind === "walk" || op.kind === "cycle") continue;
     const stopped = op.kind === "bus"
       ? ((op.busOpt && op.busOpt.legs) || []).some(l => svcRunsAt(l.hours, op.depart) === false)
-      : railRunsAt(op.depart) === false;
+      : railRunsAt(op.depart, op.r && op.r.segments && op.r.segments[0] && op.r.segments[0].line) === false;
     if (stopped) options.splice(i, 1);
+  }
+
+  /* Near the end of service we cannot say whether this line's last train has gone. */
+  if (options.length && railLastTrainDoubt(options[0].depart)){
+    options.forEach(op => {
+      if (op.kind === "rail" || op.kind === "bridge") op.lateTrain = true;
+    });
   }
 
   /* One fare for the whole journey, on the total ridden distance - not a sum of per-leg
@@ -3407,7 +3456,7 @@ function viewTrip(){
   if (T.loading) results = `<div class="panel"><div class="meta">Finding routes…</div></div>`;
   else if (T.results && !T.results.length && railRunsAt(T.when === "now" ? nowMin() : parseHM(T.time)) === false)
     results = `<div class="panel"><b>Nothing is running at ${hm(T.when === "now" ? nowMin() : parseHM(T.time))}.</b>
-      <div class="meta">Trains run about ${esc(RAIL_HOURS_NOTE)}${busHoursKnown() ? ", and no bus on this route is running either" : ""}. Try a time inside those hours.</div></div>`;
+      <div class="meta">Trains run ${esc(railHoursNote())}${busHoursKnown() ? ", and no bus on this route is running either" : ""}. Try a time inside those hours.</div></div>`;
   else if (T.results && !T.results.length) results = samePlace(T.from, T.to)
     ? `<div class="panel"><b>You're already there.</b><div class="meta">${esc(T.from.name)} is both the start and the destination. Pick somewhere else to go.</div></div>`
     : `<div class="panel"><b>No route found.</b><div class="meta">Try another start or destination.</div></div>`;
@@ -3452,7 +3501,7 @@ function viewTrip(){
             <div class="ttime"><b>${op.low}–${op.high}</b> min</div></div>
           <div class="meta">${T.when === "arrive" ? `Leave by <b style="color:var(--ink)">${hm(op.depart)}</b>` : `Leave ${hm(op.depart)}`} · arrive ${hm(op.arriveLow)}–${hm(op.arriveHigh)} · ${op.transfers} change${op.transfers === 1 ? "" : "s"} · ${op.fare.amount > 0 ? `<b style="color:var(--ink)">S$${op.fare.amount.toFixed(2)}</b>` : "free"}</div>
           ${op.why.length ? `<div class="twhy">${op.why.slice(0, 2).map(w => `<span>• ${esc(w)}</span>`).join("")}</div>` : ""}
-          <div class="ttags">${op.best ? `<span class="tag why">Best for ${PERSONA.name}</span>` : ""}${op.kind === "bridge" ? `<span class="tag" style="background:#EDE9FE;color:#6D28D9">Free bridging bus</span>` : ""}${op.fastest ? `<span class="tag indoor">Fastest</span>` : ""}${op.kind === "bus" ? `<span class="tag rain">Bus times simulated</span>` : ""}${op.sources.every(s => s !== "osrm") && op.kind !== "bus" ? `<span class="tag rain">Street legs estimated</span>` : ""}${op.fare.estimated && op.fare.amount > 0 ? `<span class="tag rain">Fare estimated</span>` : ""}</div>
+          <div class="ttags">${op.best ? `<span class="tag why">Best for ${PERSONA.name}</span>` : ""}${op.kind === "bridge" ? `<span class="tag" style="background:#EDE9FE;color:#6D28D9">Free bridging bus</span>` : ""}${op.fastest ? `<span class="tag indoor">Fastest</span>` : ""}${op.kind === "bus" ? `<span class="tag rain">Bus times simulated</span>` : ""}${op.sources.every(s => s !== "osrm") && op.kind !== "bus" ? `<span class="tag rain">Street legs estimated</span>` : ""}${op.fare.estimated && op.fare.amount > 0 ? `<span class="tag rain">Fare estimated</span>` : ""}${op.lateTrain ? `<span class="tag rain">Check last train</span>` : ""}</div>
         </button>`).join("")}</div>
       ${(() => { const op = T.results[T.sel]; return `
       <div class="panel" aria-live="polite">
@@ -3462,6 +3511,7 @@ function viewTrip(){
         <ol class="tsteps">${tripSteps(op).map(x => `<li>${x}</li>`).join("")}</ol>
         <div class="meta" style="margin:6px 0 10px">Why this range: ${op.kind === "bridge" ? "as for the train, plus 6–15 min waiting for the bridging bus and slower road travel over the closed stretch" : op.kind === "rail" ? "train wait of 1–5 min, ride time −5% to +10%, line changes of 3–6 min, and ±10% walking or ±15% cycling time" : op.kind === "bus" ? "the wait can stretch to the next bus, and road traffic changes the ride by −15% to +25%" : "±10% walking or ±15% cycling time"}.
           ${osrm ? "Walking and cycling legs follow OpenStreetMap streets (OSRM)." : "Walking and cycling legs are straight-line estimates because the routing server isn't running."}</div>
+        ${op.lateTrain ? `<div class="meta" style="margin:0 0 10px"><b style="color:var(--ink)">Check the last train.</b> Last trains run between about 23:15 and 00:15 depending on the line and the direction, and LTA publishes no timetable we can read, so we cannot tell you whether this one has gone. The station poster and the operator apps have the exact time.</div>` : ""}
         <div class="meta" style="margin:0 0 10px">${op.fare.amount === 0 ? "No fare: you are walking or cycling the whole way."
           : op.fare.estimated
             ? `Fare <b style="color:var(--ink)">S$${op.fare.amount.toFixed(2)}</b> over ${op.fare.km.toFixed(1)} km is <b style="color:var(--ink)">an estimate</b> - no fare table is installed. Singapore charges one distance fare for the whole journey, transfers included; see the README to add the published table.`
@@ -4187,6 +4237,7 @@ render();
 loadBusData();
 loadCovered();
 loadFares();
+loadTrainHours();
 mapFile();
 
 /* Cache the shell so the app opens underground. Registration is best effort: on a plain-http

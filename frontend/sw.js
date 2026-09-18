@@ -44,6 +44,7 @@ const SHELL = [
   "./busdata.json",
   "./covered.json",
   "./fares.json",
+  "./trainhours.json",
 ];
 
 self.addEventListener("install", event => {

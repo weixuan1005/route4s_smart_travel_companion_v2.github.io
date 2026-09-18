@@ -623,7 +623,7 @@ can still switch to test data there, for a repeatable demo.
 | Waiting for a train | 3 min | 1–5 min |
 | Changing lines | 4 min | 3–6 min |
 | Bus | route from bus data; wait from (simulated) arrival times; ride about 19 km/h plus stops | wait up to the next bus, ride −15% to +25% |
-| Train service hours | **assumed 05:30–00:30.** LTA does not publish first/last train through DataMall, so this is our figure, not theirs | trips outside it are not offered |
+| Train service hours | **an envelope, not a timetable: 05:00–00:15.** There is no network-wide last train — first trains leave termini about 05:00–05:30, last trains about 23:15–00:15, varying by line *and* direction. LTA publishes none of it through DataMall | outside the envelope nothing is offered; inside 23:15–00:15 rail options carry **Check last train** |
 | Bus service hours | real, from DataMall `BusRoutes` (first/last bus per service, weekday/Sat/Sun), taken at each service's first stop | a service that has stopped is not offered |
 | Fare | one distance fare for the whole journey. From `frontend/fares.json` if a table is installed; otherwise our own estimate, `S$1.09 + S$0.055/km`, capped at `S$2.50` | tagged **Fare estimated** |
 
@@ -654,10 +654,36 @@ python3 tools/fetch_bus_data.py --key YOUR_KEY --out frontend/busdata.json
 **Settings → Bus data** says which of the two you have. Without the times, buses are never
 hidden — suppressing a route because we lack its timetable would be worse than showing one.
 
-**Trains are an assumption.** LTA does not publish first and last train through DataMall, and
-exact train timings are not public. The app assumes **05:30–00:30** and says so on screen
-whenever it acts on it. Per-station first/last train would be the upgrade; it is not in
-DataMall, so it needs a different source.
+**Trains are an envelope, not a timetable.** There is no single network-wide last train:
+first trains leave termini around 05:00–05:30, last trains around 23:15–00:15, and it varies
+by line *and* by direction — the last train one way can go nearly an hour before the last
+train the other way. LTA publishes none of this through DataMall.
+
+So the app does two things rather than pretend to one:
+
+- **Outside 05:00–00:15** nothing runs anywhere, so no rail option is offered.
+- **Between 23:15 and 00:15** the last train on this line, in this direction, may already have
+  gone. The option is still shown, tagged **Check last train**, with a note pointing at the
+  station poster and the operator apps. Hiding it would be a guess; promising it would be a
+  worse one.
+
+**To replace the guess with real times**, fill in `frontend/trainhours.json`:
+
+```json
+{
+  "source": "SMRT Connect, checked 2026-01-05",
+  "effective": "2026-01-01",
+  "default": ["05:15", "23:45"],
+  "lines": { "NEL": ["05:30", "23:35"], "PGLRT": ["05:20", "00:05"] }
+}
+```
+
+Line codes are the app's canonical ones (`backend/linecodes.py`). The app then uses your
+figures and drops the **Check last train** tag, because it no longer has to guess. Direction
+is not modelled — a line runs until its latest last train either way.
+
+Two GTFS feeds on GitHub advertise Singapore train schedules. Both state in their own
+READMEs that the MRT timings are **synthetic**, so neither is used here.
 
 ### Real fares
 

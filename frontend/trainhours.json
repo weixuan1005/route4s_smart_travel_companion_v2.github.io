@@ -1,0 +1,33 @@
+{
+  "_readme": [
+    "First and last train, if you have the real figures. Shipped empty on purpose.",
+    "",
+    "LTA publishes no train timetable through DataMall, and there is no network-wide last",
+    "train: first trains leave termini around 05:00-05:30 and last trains around 23:15-00:15,",
+    "varying by line AND by direction - the last train one way can go nearly an hour before",
+    "the last train the other way. Two GTFS feeds on GitHub claim Singapore train schedules;",
+    "both say in their own READMEs that the MRT timings are synthetic. They are not used.",
+    "",
+    "With this file empty the app treats 05:00-00:15 as an outer envelope - outside it nothing",
+    "runs anywhere, so no rail option is offered - and between 23:15 and 00:15 it adds a",
+    "caution to rail options instead of promising a train that may already have gone.",
+    "",
+    "Fill in 'default' and/or 'lines' from the operator's published times (SMRT Connect, SBS",
+    "Transit, or the first/last train poster at the station) and the app uses them instead,",
+    "dropping the caution because it no longer has to guess.",
+    "",
+    "  \"default\": [\"05:15\", \"23:45\"],",
+    "  \"lines\": { \"NEL\": [\"05:30\", \"23:35\"], \"PGLRT\": [\"05:20\", \"00:05\"] }",
+    "",
+    "Line codes are the app's canonical ones - see backend/linecodes.py. Times are HH:MM, and",
+    "a last train after midnight may be written either 00:15 or 24:15.",
+    "",
+    "Not modelled: direction. These are per line, so a line is treated as running until its",
+    "latest last train in either direction."
+  ],
+  "source": "",
+  "url": "",
+  "effective": "",
+  "default": null,
+  "lines": {}
+}

@@ -98,10 +98,16 @@ One IIFE in `index.html`. Key parts, in order:
   are the same, and the trip panel says so instead of offering a nought-minute walk.
 - Service hours: `svcRunsAt()` for buses (real, from DataMall `BusRoutes` first/last, carried
   in `busdata.json` `services[key][4]`; absent from the no-key BusRouter SG build) and
-  `railRunsAt()` for trains (`RAIL_HOURS`, 05:30-00:30, an assumption - LTA publishes no train
-  timetable through DataMall). `computeOptions()` drops what has stopped; unknown hours never
-  hide anything. `withinHours()` handles windows ending after midnight, including DataMall's
-  24:xx times.
+  `railRunsAt()` for trains. There is no train timetable to have: LTA publishes none through
+  DataMall and last trains vary by line AND direction (23:15-00:15), so `RAIL_HOURS` is an
+  envelope (05:00-00:15) outside which nothing runs anywhere, and `RAIL_LAST_BAND` marks the
+  window where `op.lateTrain` puts a **Check last train** tag on rail options instead of
+  guessing. `frontend/trainhours.json` overrides both per line; it ships empty, and an empty
+  `lines: {}` must not count as a table (`{}` is truthy - that bug hid the caution once).
+  `computeOptions()` drops what has stopped; unknown hours never hide anything.
+  `withinHours()` handles windows ending after midnight, including DataMall's 24:xx times.
+  Never fill trainhours.json from a GTFS feed without checking its provenance: the public
+  Singapore ones document their MRT schedules as synthetic.
 - Fares: `fareFor(km)` is the only place a price is decided, and it takes the whole
   journey's ridden distance (`journeyKm()`), because Singapore charges one distance fare per
   journey with transfers included - it used to be `1.09 + stops*0.1` in four places. Real
