@@ -401,7 +401,8 @@ Replace `PASTE_YOUR_LTA_KEY` with the AccountKey from DataMall. The quotes matte
 printf '%s' 'PASTE_YOUR_LTA_KEY' | gcloud secrets create lta-key --data-file=-
 ```
 
-If you also have a data.gov.sg key (optional — it only raises the rate limit):
+If you also have a data.gov.sg key (genuinely optional — the forecast endpoint is open, and
+answered the same with and without a key when we tested it):
 
 ```bash
 printf '%s' 'PASTE_YOUR_DATAGOV_KEY' | gcloud secrets create datagov-key --data-file=-

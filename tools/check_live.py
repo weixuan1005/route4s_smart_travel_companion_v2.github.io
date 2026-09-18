@@ -39,8 +39,16 @@ def load_env():
             os.environ.setdefault(k.strip(), v.strip())
 
 
+UA = "smart-commuter-companion/1.0 (LTA hackathon entry)"
+
+
 def get(url, headers=None, timeout=20):
-    req = urllib.request.Request(url, headers=headers or {})
+    """Always send a User-Agent. Left to itself urllib sends "Python-urllib/3.x", which
+    data.gov.sg answers with 403 - the same thing that bit tools/get_map.py, which is why
+    every other tool here sets one. curl gets 200 from the identical URL."""
+    head = {"User-Agent": UA}
+    head.update(headers or {})
+    req = urllib.request.Request(url, headers=head)
     with urllib.request.urlopen(req, timeout=timeout) as r:
         return json.load(r)
 
@@ -53,7 +61,7 @@ def check(label, fn, key_based=True):
     except urllib.error.HTTPError as e:
         if e.code in (401, 403):
             hint = " (key not accepted: check .env, and note a new key can take a while to work)" if key_based \
-                   else " (blocked or rate limited; a DATAGOV_API_KEY in .env raises the limit)"
+                   else " (blocked or rate limited; this endpoint needs no key, so a key will not help)"
         elif e.code == 429:
             hint = " (rate limited: wait a minute and try again)"
         else:

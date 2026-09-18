@@ -4,7 +4,8 @@ Every result says where it came from ("live", "replay:<file>" or "unavailable").
 
   * bus_arrival():  LTA DataMall v3/BusArrival  (Load SEA/SDA/LSD, Type SD/DD/BD, Feature WAB)
   * bike_parking(): LTA DataMall BicycleParkingv2 (Lat, Long, Dist in km)
-  * weather():      data.gov.sg 2-hour forecast (no key needed; DATAGOV_API_KEY raises the rate limit)
+  * weather():      data.gov.sg 2-hour forecast (open endpoint, no key; a DATAGOV_API_KEY is
+                    sent if set, but the endpoint answers the same with and without one)
 """
 import json
 import math
@@ -18,6 +19,9 @@ from . import datamall
 
 TEST_DATA = Path(__file__).resolve().parent.parent / "test_data"
 WEATHER_URL = "https://api-open.data.gov.sg/v2/real-time/api/two-hr-forecast"
+# data.gov.sg 403s anonymous-looking clients: urllib's default UA is refused where curl is
+# served. httpx's default is no less bot-like, so say who we are here too.
+WEATHER_UA = "smart-commuter-companion/1.0 (LTA hackathon entry)"
 RAIN_WORDS = ("rain", "shower", "thunder", "drizzle")
 _cache = {}
 
@@ -111,7 +115,9 @@ async def weather(lat, lon, replay_name=None):
         return parse_weather(replay(replay_name, "weather_"), lat, lon, f"replay:{replay_name}")
     hit = _cache.get("weather")
     if not hit or time.time() - hit[0] > 300:
-        headers = {"x-api-key": os.getenv("DATAGOV_API_KEY")} if os.getenv("DATAGOV_API_KEY") else None
+        headers = {"User-Agent": WEATHER_UA}
+        if os.getenv("DATAGOV_API_KEY"):
+            headers["x-api-key"] = os.getenv("DATAGOV_API_KEY")
         async with httpx.AsyncClient(timeout=10) as client:
             r = await client.get(WEATHER_URL, headers=headers)
             r.raise_for_status()
