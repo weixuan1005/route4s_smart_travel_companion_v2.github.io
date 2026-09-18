@@ -1,11 +1,17 @@
-# Publishes the frontend/ folder to GitHub Pages on every push to main.
+# Publishes the frontend/ folder to GitHub Pages as the site root.
 # GitHub Pages is static hosting: the app runs, but the backend features
 # (OneMap search, OSRM street legs, live DataMall data) need the backend server.
+#
+# Manual-only on purpose. This repository's Pages source is "Deploy from a
+# branch" (main / root), so GitHub's own Jekyll builder already deploys on
+# every push to main. Running both on the same push made two deployments race,
+# and whichever finished last decided whether the app was served at / or at
+# /frontend/. The root index.html redirects to frontend/ instead.
+# If you switch Pages to "GitHub Actions" as the source, restore the push
+# trigger here and delete the root index.html redirect.
 name: Deploy frontend to GitHub Pages
 
 on:
-  push:
-    branches: [main]
   workflow_dispatch:
 
 concurrency:

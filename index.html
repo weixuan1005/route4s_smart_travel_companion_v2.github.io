@@ -1,0 +1,30 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Smart Travel Companion</title>
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<!-- GitHub Pages publishes this repository's root, but the app lives in frontend/.
+     This page forwards to it. The meta refresh covers browsers with JavaScript off;
+     the script runs first and carries any query string or #hash across. -->
+<meta http-equiv="refresh" content="0; url=frontend/index.html">
+<link rel="canonical" href="frontend/index.html">
+<script>
+  location.replace("frontend/index.html" + location.search + location.hash);
+</script>
+<style>
+  body { font: 16px/1.5 system-ui, -apple-system, "Segoe UI", sans-serif;
+         margin: 0; min-height: 100vh; display: grid; place-items: center;
+         padding: 24px; text-align: center; color: #111827; background: #f9fafb; }
+  a { color: #1d4ed8; }
+  @media (prefers-color-scheme: dark) {
+    body { color: #e5e7eb; background: #111827; }
+    a { color: #93b4fd; }
+  }
+</style>
+</head>
+<body>
+  <p>Opening the Smart Travel Companion&hellip;<br>
+  If nothing happens, <a href="frontend/index.html">continue to the app</a>.</p>
+</body>
+</html>

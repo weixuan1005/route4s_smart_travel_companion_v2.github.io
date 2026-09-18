@@ -9,3 +9,5 @@ venv/
 tools/bin/
 # OSRM data and routing files (large, rebuilt from tools/get_osm.py)
 osrm/
+# pytest
+.pytest_cache/
