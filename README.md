@@ -13,41 +13,98 @@ and cares about crowding, sheltered routes and bringing his bike.
 
 ## Run it (clean machine)
 
-Requirements: Python 3.10 or newer, and internet access for the one-time downloads.
+Requirements: **Python 3.10 or newer** and internet access. Steps 1-5 are the whole path
+from a fresh clone to the app open in a browser. Everything after them is optional.
 
 ```bash
 # 1. Get the code
-git clone <your-repo-url> smart-commuter
-cd smart-commuter
+git clone <your-repo-url> route4us
+cd route4us
 
-# 2. Install the backend (a virtual environment keeps things tidy)
-python -m venv .venv
+# 2. Check your Python before anything else
+python3 --version                  # must be 3.10 or newer
+```
+
+macOS ships 3.9, which **cannot** run this code: `backend/main.py` uses `str | None` in
+FastAPI signatures, so on 3.9 the server stops at import with
+`TypeError: unsupported operand type(s) for |: 'type' and 'NoneType'`. Install a current
+Python first, then use `python3.12` wherever `python3` appears below:
+
+```bash
+brew install python@3.12           # macOS
+```
+
+```bash
+# 3. Virtual environment and dependencies
+python3 -m venv .venv
 source .venv/bin/activate          # Windows: .venv\Scripts\activate
+python --version                   # confirm 3.10+ INSIDE the venv before going on
 pip install -r backend/requirements.txt
 
-# 3. Download the offline OpenStreetMap map for Singapore (one time)
-python tools/get_map.py            # writes frontend/map/singapore.pmtiles
-
-# 4. Optional: real bus routes without an LTA key (one time)
-python tools/fetch_bus_data.py --no-key --out frontend/busdata.json
-
-# 5. Settings file (the LTA key is optional for now)
+# 4. Settings file
 cp .env.example .env               # Windows: copy .env.example .env
+```
 
-# 6. Street routing for walking and cycling legs (needs Docker)
-python tools/get_osm.py            # OpenStreetMap data from Geofabrik (add --clip if osmium is installed)
-docker compose up -d               # first start builds the routing files: allow several minutes
-curl "http://localhost:5001/route/v1/foot/103.8965,1.4102;103.9024,1.4053"   # should answer "code":"Ok"
+Put your LTA DataMall AccountKey in `.env` as `LTA_ACCOUNT_KEY=...`. Edit the file in an
+editor rather than appending with `echo`, which would leave the key in your shell history.
+The key is optional: without it the app runs on the labelled replays in `test_data/`.
+Check that the key reaches LTA before starting the server — it prints OK or the exact error
+per feed, and never prints the key itself:
 
-# 7. Start the app
+```bash
+python tools/check_live.py
+```
+
+```bash
+# 5. Start the server
 uvicorn backend.main:app --host 0.0.0.0 --port 8000
 ```
 
-Open <http://localhost:8000>. <http://localhost:8000/api/health> should report
-`"map_file": true` and `"osrm_foot_url_set": true`.
+Now open **<http://localhost:8000>**.
 
-Without Docker the app still plans trips, but walking and cycling legs are straight-line
-estimates and the app labels them **Street legs estimated**.
+Leave the server running, and use that address rather than opening `frontend/index.html`
+directly: the same server answers both the app and `/api/*`, and the app calls the API with
+a *relative* URL. Opened as a `file://` path, or from static hosting such as GitHub Pages,
+you get the app but no live data at all.
+
+To see what the server picked up:
+
+```bash
+curl -s http://localhost:8000/api/health    # datamall_key_set: true once your key is in .env
+```
+
+**Settings -> Live data** in the app shows the same thing. With a key set, the
+**Use test data** switch becomes available; turn it off to use live feeds. Without a key it
+stays on and says why.
+
+### Optional extras
+
+None of these are needed to open the app. Each replaces a labelled fallback with real data.
+Restart the server after the first two so it serves the new files.
+
+```bash
+python tools/get_map.py                                             # offline OpenStreetMap basemap -> frontend/map/singapore.pmtiles
+python tools/fetch_bus_data.py --no-key --out frontend/busdata.json  # real LTA bus stops and routes
+python tools/get_osm.py                                             # OSM extract for OSRM (add --clip if osmium is installed)
+docker compose up -d                                                # OSRM walking + cycling; the first start builds routing files and takes several minutes
+curl "http://localhost:5001/route/v1/foot/103.8965,1.4102;103.9024,1.4053"   # should answer "code":"Ok"
+```
+
+Without the map file the map says so and draws lines and stations only. Without OSRM,
+walking and cycling legs are straight-line estimates and the app labels them
+**Street legs estimated**.
+
+One thing to watch: `/api/health` reports `osrm_foot_url_set: true`, and Settings shows
+street routing as "Configured", as soon as `.env` exists - `.env.example` already carries
+both OSRM URLs. That reflects the URLs being set, not OSRM answering. The real check is a
+street leg:
+
+```bash
+curl -s "http://localhost:8000/api/route?mode=bike&from=1.4102,103.8965&to=1.4053,103.9024"
+```
+
+`"source": "osrm"` is real street routing on OpenStreetMap; `"source": "estimate"` means
+OSRM is not reachable and the app is saying so rather than guessing quietly.
 
 ### Check the data layer
 
@@ -69,8 +126,16 @@ Without a key, live endpoints answer `"source": "unavailable"` rather than inven
 
 ### Open it on your phone
 
-- **Same Wi-Fi, quick check:** open `http://<your-computer's-IP>:8000` on the phone.
-  This is enough to test the layout.
+- **Same Wi-Fi, quick check:** find your computer's address on the network and open it on
+  the phone:
+
+  ```bash
+  ipconfig getifaddr en0 || ipconfig getifaddr en1   # macOS, e.g. 192.168.1.42
+  ```
+
+  Then browse to `http://192.168.1.42:8000`. Enough to test the layout and live data.
+  macOS asks to allow incoming connections the first time; allow it or the phone cannot
+  reach the server.
 - **For judging:** use HTTPS. Offline caching, location and notifications (later phases)
   only work over HTTPS. Deploy the backend to an HTTPS host (for example Google Cloud Run),
   or expose it through an HTTPS tunnel.
