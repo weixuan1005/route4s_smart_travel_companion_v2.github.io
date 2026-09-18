@@ -173,7 +173,13 @@ device** in Settings removes it. The DataMall key lives in `.env`, is git-ignore
    differently; we read through a list of candidate names and keep anything unrecognised
    under `raw` so a real response can be inspected. A renamed column loses that field rather
    than breaking.
-3. **Fares are estimated**, not from a fare table.
+3. **Fares are estimated unless a table is installed.** The *model* is right — Singapore
+   charges one distance fare per journey, transfers included, and the app computes it that
+   way over the total ridden distance rather than per leg. The *numbers* come from
+   `frontend/fares.json`, which ships empty because the Public Transport Council's bands
+   change at each fare review and guessing them would be inventing data. With no table the
+   app falls back to `S$1.09 + S$0.055/km` capped at `S$2.50`, ours not theirs, and tags
+   every option **Fare estimated**.
 4. **The trip simulation is a simulation.** There is no live vehicle position feed in it.
 5. **Covered walkways are OpenStreetMap, not LTA.** `CoveredLinkWay` is authoritative and
    would be the upgrade; it ships as a shapefile download and needs different tooling.

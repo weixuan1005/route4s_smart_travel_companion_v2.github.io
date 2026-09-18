@@ -95,6 +95,12 @@ One IIFE in `index.html`. Key parts, in order:
   00:00-23:59, so a trip running past midnight reads 01:00 rather than 25:00.
 - `samePlace()` is 50 m; `computeOptions()` returns no options when start and destination
   are the same, and the trip panel says so instead of offering a nought-minute walk.
+- Fares: `fareFor(km)` is the only place a price is decided, and it takes the whole
+  journey's ridden distance (`journeyKm()`), because Singapore charges one distance fare per
+  journey with transfers included - it used to be `1.09 + stops*0.1` in four places. Real
+  bands live in `frontend/fares.json`, shipped with `bands: []`; while it is empty the app
+  falls back to `FARE_EST` and tags every option **Fare estimated**. Never put guessed band
+  values in that file.
 - One clock, everywhere. `dayStart()` (now, rounded up to five minutes) anchors the tourist
   itinerary, which used to start at a hardcoded 10:00 while the clock beside it read the real
   time - so the watch would say "Leave by 11:35" at 14:13. `startTrip()` takes its clock from

@@ -1201,6 +1201,14 @@ function viewSettings(){
          <div class="meta" style="margin-top:6px">Until then the app never claims a walk is sheltered.</div>`}
   </div>
   <div class="panel">
+    <h3>Fares</h3>
+    ${FARETABLE
+      ? `<div class="row"><div><b>${esc(FARETABLE.source || "Fare table")}</b><div class="meta">${FARETABLE.bands.length} distance bands${FARETABLE.effective ? ` · effective ${esc(FARETABLE.effective)}` : ""}${FARETABLE.concession ? ` · ${esc(FARETABLE.concession)}` : ""}</div></div><span class="tag why">Active</span></div>
+         <div class="meta" style="margin-top:6px">One through fare per journey, on total distance.</div>`
+      : `<div class="row"><div><b>Estimated</b><div class="meta">No fare table in <code>frontend/fares.json</code>. Fares are our own distance estimate, tagged <b>Fare estimated</b> on every option.</div></div><span class="tag rain">Estimate</span></div>
+         <div class="meta" style="margin-top:6px">Add the published fare table to show real prices - see the README.</div>`}
+  </div>
+  <div class="panel">
     <h3>Connected devices</h3>
     <div class="row"><div><b>Apple Watch Series 10</b><div class="meta">Connected via Bluetooth</div></div><span class="tag indoor">Paired</span></div>
   </div>
@@ -1223,7 +1231,8 @@ function busOptions(a, b, seedKey){
   const R = rng(seedKey), used = new Set(), out = [];
   const pick = () => { let v; do { v = BUS_POOL[Math.floor(R()*BUS_POOL.length)]; } while (used.has(v)); used.add(v); return v; };
   const stopName = p => p.station ? (R() < .5 ? `${p.name} Stn Exit ${"ABCD"[Math.floor(R()*4)]}` : `Opp ${p.name} Stn`) : `Near ${p.name}`;
-  const rideOf = (dd, f) => ({ride: Math.round(dd*f*0.095) + 2, stops: Math.max(2, Math.round(dd*f/14))});
+  const rideOf = (dd, f) => ({ride: Math.round(dd*f*0.095) + 2, stops: Math.max(2, Math.round(dd*f/14)),
+                              km: +(dd*f/35).toFixed(2)});
   const count = d > 520 ? 1 : 2 + (R() < .4 ? 1 : 0);
   for (let i = 0; i < count; i++){
     const f = 1.25 + R()*0.35, legs = [];
@@ -1243,7 +1252,9 @@ function busOptions(a, b, seedKey){
     out.push({legs, mid, walkIn, walkOut, gap,
       rideTotal: legs.reduce((t, l) => t + l.ride, 0) + (legs.length > 1 ? 5 : 0),
       arrivals: [first, first + gap, first + gap + 6 + Math.floor(R()*8)],
-      load: Math.floor(R()*3), deck: BUS_DECKS[Math.floor(R()*3)], fare: 1.09 + stops*0.06});
+      load: Math.floor(R()*3), deck: BUS_DECKS[Math.floor(R()*3)],
+      km: legs.reduce((t, l) => t + l.km, 0),
+      fare: fareFor(legs.reduce((t, l) => t + l.km, 0)).amount});
   }
   return out;
 }
@@ -1420,7 +1431,7 @@ function realBusOptions(a, b, seedKey){
       walkIn: walkMin(0) + Math.round(f.wA - walkMin(0)), walkOut: Math.round(f.wB === undefined ? 2 : walkMin(f.wB)), gap,
       rideTotal: legs.reduce((t, l) => t + l.ride, 0) + (legs.length > 1 ? 5 : 0),
       arrivals: [first, first + gap, first + 2*gap + Math.floor(R()*4)],
-      load: Math.floor(R()*3), deck: BUS_DECKS[Math.floor(R()*2)], fare: 0.99 + km*0.07};
+      load: Math.floor(R()*3), deck: BUS_DECKS[Math.floor(R()*2)], km, fare: fareFor(km).amount};
   });
 }
 function realStopBoard(stopName, code){
@@ -1464,6 +1475,60 @@ function initCovered(raw){
   }));
   COVERED = {ways, grid, generated: raw.generated || "", source: raw.source || "OpenStreetMap",
              attribution: raw.attribution || "© OpenStreetMap contributors"};
+}
+
+/* ---------- Fares ----------
+   Singapore charges by distance across a whole journey, not per stop and not per leg: a bus
+   into a train is one fare on the combined distance. The band table is set by the Public
+   Transport Council and changes at each fare review, so it lives in frontend/fares.json
+   rather than being written into this file - a price invented here would be wrong within
+   months and wrong in front of a judge today.
+
+   frontend/fares.json: {source, effective, url, concession, bands: [{max_km, fare}, ...]}
+
+   Without that file the app still shows a fare, because a commuter planning by cost needs
+   one, but it is computed by FARE_EST below and every option carries a "Fare estimated" tag.
+*/
+let FARETABLE = null;
+
+async function loadFares(){
+  try {
+    const r = await fetch("fares.json", {cache:"no-cache"});
+    if (!r.ok) return;
+    const t = await r.json();
+    if (!Array.isArray(t.bands) || !t.bands.length) return;   /* an empty table is no table */
+    FARETABLE = {...t, bands: [...t.bands].sort((a, b) => a.max_km - b.max_km)};
+    render();
+  } catch (e) { /* no table: estimates stay, and stay labelled */ }
+}
+
+/* Charged distance: the ridden legs only. Walking and cycling cost nothing. */
+function railKm(r){
+  let km = 0;
+  (r && r.segments || []).forEach(sg => {
+    for (let i = 1; i < sg.stations.length; i++) km += dist(st(sg.stations[i-1]), st(sg.stations[i])) / 35;
+  });
+  return km;
+}
+function journeyKm(op){
+  if (op.kind === "walk" || op.kind === "cycle") return 0;
+  let km = op.r ? railKm(op.r) : railKm(op.leg);
+  if (op.busOpt && op.busOpt.legs) km += op.busOpt.legs.reduce((t, l) => t + (l.km || 0), 0);
+  return km;
+}
+
+/* Ours, not the PTC's: distance-based like the real tariff and flat once long, so it does not
+   run away over a 40 km trip. Both numbers are stated in the README. */
+const FARE_EST = km => Math.min(2.50, 1.09 + 0.055 * km);
+
+function fareFor(km){
+  if (!FARETABLE){
+    return {amount: +FARE_EST(km).toFixed(2), km, estimated: true};
+  }
+  const bands = FARETABLE.bands;
+  const band = bands.find(b => km <= b.max_km) || bands[bands.length - 1];
+  return {amount: +(+band.fare).toFixed(2), km, estimated: false,
+          source: FARETABLE.source || "fare table", effective: FARETABLE.effective || ""};
 }
 
 async function loadCovered(){
@@ -1831,7 +1896,7 @@ function stationRoute(a, b, ignoreClosures){
   const transfers = segments.length - 1;
   const ride = stops*RIDE_MIN, change = transfers*TRANSFER_MIN;
   return {segments, stops, transfers, ride, change, wait:WAIT_MIN, total: ride + change + WAIT_MIN,
-          fare: 1.09 + stops*0.1, walk: walkMin(dist(st(a), st(b)))};
+          fare: fareFor(railKm({segments})).amount, walk: walkMin(dist(st(a), st(b)))};
 }
 
 function viewJourney(){
@@ -3148,6 +3213,9 @@ async function computeOptions(p, opt){
       }
     }));
   }
+  /* One fare for the whole journey, on the total ridden distance - not a sum of per-leg
+     prices, which is not how a through fare works. */
+  options.forEach(op => { op.fare = fareFor(journeyKm(op)); });
   options.forEach(op => { op.score = op.base + op.penalty; });
   const byBase = [...options].sort((a, b) => a.base - b.base)[0];
   options.sort((a, b) => a.score - b.score);
@@ -3331,9 +3399,9 @@ function viewTrip(){
         <button class="tripopt" role="listitem" data-trip-opt="${i}" aria-pressed="${i === T.sel}">
           <div class="row" style="align-items:flex-start"><div class="tstrip">${tripStrip(op)}</div>
             <div class="ttime"><b>${op.low}–${op.high}</b> min</div></div>
-          <div class="meta">${T.when === "arrive" ? `Leave by <b style="color:var(--ink)">${hm(op.depart)}</b>` : `Leave ${hm(op.depart)}`} · arrive ${hm(op.arriveLow)}–${hm(op.arriveHigh)} · ${op.transfers} change${op.transfers === 1 ? "" : "s"}</div>
+          <div class="meta">${T.when === "arrive" ? `Leave by <b style="color:var(--ink)">${hm(op.depart)}</b>` : `Leave ${hm(op.depart)}`} · arrive ${hm(op.arriveLow)}–${hm(op.arriveHigh)} · ${op.transfers} change${op.transfers === 1 ? "" : "s"} · ${op.fare.amount > 0 ? `<b style="color:var(--ink)">S$${op.fare.amount.toFixed(2)}</b>` : "free"}</div>
           ${op.why.length ? `<div class="twhy">${op.why.slice(0, 2).map(w => `<span>• ${esc(w)}</span>`).join("")}</div>` : ""}
-          <div class="ttags">${op.best ? `<span class="tag why">Best for ${PERSONA.name}</span>` : ""}${op.kind === "bridge" ? `<span class="tag" style="background:#EDE9FE;color:#6D28D9">Free bridging bus</span>` : ""}${op.fastest ? `<span class="tag indoor">Fastest</span>` : ""}${op.kind === "bus" ? `<span class="tag rain">Bus times simulated</span>` : ""}${op.sources.every(s => s !== "osrm") && op.kind !== "bus" ? `<span class="tag rain">Street legs estimated</span>` : ""}</div>
+          <div class="ttags">${op.best ? `<span class="tag why">Best for ${PERSONA.name}</span>` : ""}${op.kind === "bridge" ? `<span class="tag" style="background:#EDE9FE;color:#6D28D9">Free bridging bus</span>` : ""}${op.fastest ? `<span class="tag indoor">Fastest</span>` : ""}${op.kind === "bus" ? `<span class="tag rain">Bus times simulated</span>` : ""}${op.sources.every(s => s !== "osrm") && op.kind !== "bus" ? `<span class="tag rain">Street legs estimated</span>` : ""}${op.fare.estimated && op.fare.amount > 0 ? `<span class="tag rain">Fare estimated</span>` : ""}</div>
         </button>`).join("")}</div>
       ${(() => { const op = T.results[T.sel]; return `
       <div class="panel" aria-live="polite">
@@ -3343,6 +3411,10 @@ function viewTrip(){
         <ol class="tsteps">${tripSteps(op).map(x => `<li>${x}</li>`).join("")}</ol>
         <div class="meta" style="margin:6px 0 10px">Why this range: ${op.kind === "bridge" ? "as for the train, plus 6–15 min waiting for the bridging bus and slower road travel over the closed stretch" : op.kind === "rail" ? "train wait of 1–5 min, ride time −5% to +10%, line changes of 3–6 min, and ±10% walking or ±15% cycling time" : op.kind === "bus" ? "the wait can stretch to the next bus, and road traffic changes the ride by −15% to +25%" : "±10% walking or ±15% cycling time"}.
           ${osrm ? "Walking and cycling legs follow OpenStreetMap streets (OSRM)." : "Walking and cycling legs are straight-line estimates because the routing server isn't running."}</div>
+        <div class="meta" style="margin:0 0 10px">${op.fare.amount === 0 ? "No fare: you are walking or cycling the whole way."
+          : op.fare.estimated
+            ? `Fare <b style="color:var(--ink)">S$${op.fare.amount.toFixed(2)}</b> over ${op.fare.km.toFixed(1)} km is <b style="color:var(--ink)">an estimate</b> - no fare table is installed. Singapore charges one distance fare for the whole journey, transfers included; see the README to add the published table.`
+            : `Fare <b style="color:var(--ink)">S$${op.fare.amount.toFixed(2)}</b> for ${op.fare.km.toFixed(1)} km, one through fare for the whole journey. ${esc(op.fare.source)}${op.fare.effective ? `, effective ${esc(op.fare.effective)}` : ""}.`}</div>
         <button class="primary" id="tripStart">Start this trip</button>
       </div>`; })()}`;
   }
@@ -4063,6 +4135,7 @@ $("#dReset").onclick = () => { clearInterval(timer); S = initial(); render(); };
 render();
 loadBusData();
 loadCovered();
+loadFares();
 mapFile();
 
 /* Cache the shell so the app opens underground. Registration is best effort: on a plain-http

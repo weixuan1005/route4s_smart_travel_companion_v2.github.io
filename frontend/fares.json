@@ -1,0 +1,27 @@
+{
+  "_readme": [
+    "Fares for the trip planner. Shipped with an empty 'bands' on purpose: that is the",
+    "published fare table, and nothing in this repo is allowed to guess at one. While bands",
+    "is empty the app still shows a fare, because someone planning by cost needs a number,",
+    "but computes it itself and tags every option 'Fare estimated'.",
+    "",
+    "To show real fares, fill in bands from the published table (Public Transport Council,",
+    "TransitLink, or an LTA dataset) and set source, url and effective. Nothing else to do -",
+    "the app picks it up on reload and the tag disappears.",
+    "",
+    "Singapore charges ONE distance fare for a whole journey, transfers included, so bands",
+    "are looked up once against the total ridden distance - never once per leg. Walking and",
+    "cycling are not charged.",
+    "",
+    "bands: [{max_km, fare}, ...] - the app sorts them and takes the first band whose max_km",
+    "covers the distance, falling back to the last band for anything longer.",
+    "",
+    "Example shape only, with fares left at 0 so they cannot be mistaken for real prices:",
+    "  \"bands\": [{\"max_km\": 3.2, \"fare\": 0.00}, {\"max_km\": 4.2, \"fare\": 0.00}]"
+  ],
+  "source": "",
+  "url": "",
+  "effective": "",
+  "concession": "Adult, card",
+  "bands": []
+}

@@ -43,6 +43,7 @@ const SHELL = [
   "./vendor/protomaps-leaflet/protomaps-leaflet.js",
   "./busdata.json",
   "./covered.json",
+  "./fares.json",
 ];
 
 self.addEventListener("install", event => {

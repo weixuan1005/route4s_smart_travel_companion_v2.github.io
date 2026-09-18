@@ -622,6 +622,7 @@ can still switch to test data there, for a repeatable demo.
 | Waiting for a train | 3 min | 1–5 min |
 | Changing lines | 4 min | 3–6 min |
 | Bus | route from bus data; wait from (simulated) arrival times; ride about 19 km/h plus stops | wait up to the next bus, ride −15% to +25% |
+| Fare | one distance fare for the whole journey. From `frontend/fares.json` if a table is installed; otherwise our own estimate, `S$1.09 + S$0.055/km`, capped at `S$2.50` | tagged **Fare estimated** |
 
 Options are ranked for Arjun by: middle of the time range + 5 min per change + half the range
 width + 4 min for buses, plus today's conditions: +12 for cycling into rain at the start,
@@ -629,6 +630,33 @@ width + 4 min for buses, plus today's conditions: +12 for cycling into rain at t
 The morning check adds 0.15 per minute of later departure, so it only moves Arjun later
 when that clearly helps. So a slightly slower trip with fewer changes and a narrower range can
 rank first. These are stated assumptions, not measured values.
+
+### Real fares
+
+Singapore charges **one distance fare for a whole journey**, transfers included — not a price
+per leg and not a price per stop. The app works that way: it adds up the ridden distance
+(walking and cycling are free) and looks up a single fare.
+
+The band table itself is published by the Public Transport Council and changes at each fare
+review, so it is **not** written into the code. It lives in `frontend/fares.json`, which ships
+with an empty `bands` list:
+
+```json
+{
+  "source": "Public Transport Council fare table",
+  "url": "where you got it",
+  "effective": "2026-01-01",
+  "concession": "Adult, card",
+  "bands": [{"max_km": 3.2, "fare": 0.00}, {"max_km": 4.2, "fare": 0.00}]
+}
+```
+
+Fill in `bands` from the published table and reload — no other change needed. **Settings →
+Fares** then shows the source and its effective date instead of *Estimate*, and the **Fare
+estimated** tag disappears from the trip options.
+
+Until then the app still shows a fare, because a commuter planning by cost needs a number, but
+it is our own estimate (in the table above) and every option says so.
 
 ## Map and attribution
 
