@@ -71,21 +71,41 @@ def get_tool():
     return exe
 
 
+def build_exists(url):
+    """Is this build there? Asks for a single byte rather than sending HEAD, because some CDNs
+    refuse HEAD outright - and a refused HEAD looks exactly like a missing file. Returns the
+    status so the caller can tell "not there yet" (404) from "not allowed" (403/405)."""
+    req = urllib.request.Request(url, headers={"Range": "bytes=0-0"})
+    try:
+        with urllib.request.urlopen(req, timeout=20) as r:
+            return r.status in (200, 206), r.status
+    except urllib.error.HTTPError as e:
+        return False, e.code
+
+
 def latest_build(days=14):
     """Find the newest daily build that exists (builds are named YYYYMMDD.pmtiles)."""
     today = datetime.date.today()
+    seen = []
     for back in range(days):
         url = f"{BUILDS}{(today - datetime.timedelta(days=back)):%Y%m%d}.pmtiles"
         try:
-            req = urllib.request.Request(url, method="HEAD")
-            with urllib.request.urlopen(req, timeout=20) as r:
-                if r.status == 200:
-                    return url
-        except urllib.error.HTTPError:
-            continue
+            ok, status = build_exists(url)
         except urllib.error.URLError as e:
             sys.exit(f"Can't reach {BUILDS}: {e.reason}")
-    sys.exit(f"No build found in the last {days} days. Check {BUILDS} and pass --source URL.")
+        if ok:
+            return url
+        seen.append(status)
+
+    codes = sorted(set(seen))
+    detail = f"every request came back {codes[0]}" if len(codes) == 1 else f"requests came back {codes}"
+    hint = ("The server is refusing these requests rather than saying the file is missing, so the "
+            "builds may have moved or your network may be blocking them."
+            if codes and codes[0] in (401, 403, 405, 451) else
+            "The daily builds may have been renamed or pruned.")
+    sys.exit(f"No build found in the last {days} days ({detail}). {hint}\n"
+             f"Open {BUILDS} in a browser, copy the newest .pmtiles file name, and pass it:\n"
+             f"    python tools/get_map.py --source {BUILDS}YYYYMMDD.pmtiles")
 
 
 def main():
