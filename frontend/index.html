@@ -3061,6 +3061,17 @@ async function computeOptions(p, opt){
   return options;
 }
 
+/* Plan, then take the reader to the answer.
+
+   Every button that plans a trip sits above the results, the app scrolls #app rather than the
+   window, and render() replaces the markup so that container returns to the top. Without this
+   the routes appear roughly 1500px below the fold and the tap looks like it did nothing. */
+async function planAndShow(){
+  await planTrip();
+  const first = document.querySelector("[data-trip-opt]") || document.querySelector(".panel.cond");
+  if (first) first.scrollIntoView({behavior: "smooth", block: "start"});
+}
+
 async function planTrip(){
   const T = tripState();
   T.loading = true; T.results = null; T.sel = 0; T.stale = false; render();
@@ -3234,7 +3245,7 @@ function viewTrip(){
 function bindTrip(){
   const T = tripState();
   bindRoutine();
-  const rf = $("#tripRefresh"); if (rf) rf.onclick = planTrip;
+  const rf = $("#tripRefresh"); if (rf) rf.onclick = planAndShow;
   ["from", "to"].forEach(w => {
     const inp = $(`#in-${w}`); if (!inp) return;
     inp.oninput = () => { T.q[w] = inp.value; renderTripSuggestions(w); };
@@ -3257,7 +3268,7 @@ function bindTrip(){
   const tt = $("#tripTime"); if (tt) tt.onchange = () => { T.time = tt.value; T.results = null; };
   const bk = $("#tripBike"); if (bk) bk.onclick = () => { T.bike = !T.bike; T.results = null; render(); };
   const fd = $("#tripFold"); if (fd) fd.onclick = () => { T.foldable = !T.foldable; T.results = null; render(); };
-  const go = $("#tripGo"); if (go) go.onclick = planTrip;
+  const go = $("#tripGo"); if (go) go.onclick = planAndShow;
   document.querySelectorAll("[data-trip-opt]").forEach(b => b.onclick = () => { T.sel = +b.dataset.tripOpt; OSM && (OSM.fitKey = ""); render(); });
   const stt = $("#tripStart"); if (stt) stt.onclick = () => startPlannedTrip(T.results[T.sel]);
 }
@@ -3717,11 +3728,7 @@ function bindRoutine(){
   const use = $("#mcUse"); if (use) use.onclick = async () => {
     const T = tripState(), p = S.check.pick;
     Object.assign(T, {from: {...r.from}, to: {...r.to}, bike: r.bike, foldable: r.foldable, when: "leave", time: hm24(p.m)});
-    await planTrip();
-    /* The routes render further down the page than the button that asked for them, so on a
-       phone nothing appears to happen. Take the reader to the answer. */
-    const first = document.querySelector("[data-trip-opt]") || document.querySelector(".panel.cond");
-    if (first) first.scrollIntoView({behavior: "smooth", block: "start"});
+    await planAndShow();
   };
 }
 
