@@ -29,16 +29,37 @@ OSRM = ROOT / "osrm"
 
 
 def download(dest):
+    """Fetch the extract, and refuse to keep a partial one.
+
+    A dropped connection ends the read loop quietly, so without this check the file looks
+    finished, the progress bar reaches its last printed figure, and the failure only surfaces
+    much later as "PBF error: unexpected EOF" from osmium or a broken OSRM build. A truncated
+    download is deleted here instead, where the cause is still obvious."""
     print(f"Downloading {URL}")
-    with urllib.request.urlopen(urllib.request.Request(URL, headers=UA), timeout=120) as r, open(dest, "wb") as f:
-        total = int(r.headers.get("Content-Length", 0))
-        done = 0
-        while chunk := r.read(1 << 20):
-            f.write(chunk)
-            done += len(chunk)
-            if total:
-                print(f"  {done / 1e6:6.0f} / {total / 1e6:.0f} MB", end="\r", flush=True)
-    print()
+    part = dest.with_suffix(dest.suffix + ".part")
+    total = done = 0
+    try:
+        with urllib.request.urlopen(urllib.request.Request(URL, headers=UA), timeout=120) as r, open(part, "wb") as f:
+            total = int(r.headers.get("Content-Length", 0))
+            while chunk := r.read(1 << 20):
+                f.write(chunk)
+                done += len(chunk)
+                if total:
+                    print(f"  {done / 1e6:6.0f} / {total / 1e6:.0f} MB", end="\r", flush=True)
+        print()
+    except Exception as e:
+        part.unlink(missing_ok=True)
+        sys.exit(f"Download failed after {done / 1e6:.0f} MB: {e}\nRun the command again; nothing partial was kept.")
+
+    if total and done != total:
+        part.unlink(missing_ok=True)
+        sys.exit(f"Download stopped at {done / 1e6:.0f} MB of {total / 1e6:.0f} MB. The connection dropped, "
+                 f"so the file was incomplete and has been deleted.\nRun the command again.")
+    if done < 50_000_000:
+        part.unlink(missing_ok=True)
+        sys.exit(f"The download is only {done / 1e6:.0f} MB, far smaller than this extract should be, "
+                 f"so it is not usable. It has been deleted.\nRun the command again.")
+    part.replace(dest)
 
 
 def main():
