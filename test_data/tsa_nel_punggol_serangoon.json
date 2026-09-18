@@ -1,0 +1,19 @@
+{
+  "_note": "TEST DATA (replay) for Arjun's demo: North East Line down between Serangoon and Punggol. Same shape as LTA DataMall TrainServiceAlerts. Not a live response.",
+  "value": {
+    "Status": 2,
+    "AffectedSegments": [
+      {
+        "Line": "NEL",
+        "Direction": "Both",
+        "Stations": "NE12,NE13,NE14,NE15,NE16,NE17",
+        "FreePublicBus": "NE12,NE13,NE14,NE15,NE16,NE17",
+        "FreeMRTShuttle": "NE12,NE13,NE14,NE15,NE16,NE17",
+        "MRTShuttleDirection": "Both"
+      }
+    ],
+    "Message": [
+      {"Content": "[TEST DATA] 0805hrs: NEL - No train service between Serangoon and Punggol due to a signalling fault. Free regular bus and free bridging bus services are available between Serangoon and Punggol.", "CreatedDate": "2026-09-18 08:05:00"}
+    ]
+  }
+}

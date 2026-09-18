@@ -1,0 +1,21 @@
+{
+ "_note": "TEST DATA (replay). Same shape as LTA DataMall BicycleParkingv2. Not live.",
+ "value": [
+  {
+   "Description": "SUMANG LRT STATION",
+   "Latitude": 1.40865,
+   "Longitude": 103.8983,
+   "RackType": "Yellow Box",
+   "RackCount": 40,
+   "ShelterIndicator": "Y"
+  },
+  {
+   "Description": "BLK 268 PUNGGOL FIELD",
+   "Latitude": 1.40901,
+   "Longitude": 103.8977,
+   "RackType": "Racks_Double",
+   "RackCount": 24,
+   "ShelterIndicator": "N"
+  }
+ ]
+}

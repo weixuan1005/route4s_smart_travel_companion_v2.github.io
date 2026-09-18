@@ -1,0 +1,19 @@
+{
+  "_note": "TEST DATA (replay): Punggol LRT West Loop partly down. Same shape as LTA DataMall TrainServiceAlerts. Not a live response.",
+  "value": {
+    "Status": 2,
+    "AffectedSegments": [
+      {
+        "Line": "PTL",
+        "Direction": "Both",
+        "Stations": "PTC,PW1,PW2,PW3",
+        "FreePublicBus": "PTC,PW1,PW2,PW3",
+        "FreeMRTShuttle": "",
+        "MRTShuttleDirection": ""
+      }
+    ],
+    "Message": [
+      {"Content": "[TEST DATA] 0712hrs: PGLRT - No train service between Punggol and Punggol Point on the West Loop due to a train fault. Free regular bus services are available at designated bus stops.", "CreatedDate": "2026-09-18 07:12:00"}
+    ]
+  }
+}

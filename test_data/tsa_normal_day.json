@@ -1,0 +1,10 @@
+{
+  "_note": "TEST DATA (replay). Same shape as LTA DataMall TrainServiceAlerts. Not a live response.",
+  "value": {
+    "Status": 1,
+    "AffectedSegments": [],
+    "Message": [
+      {"Content": "[TEST DATA] Bus service 43 will be diverted along Punggol Way this weekend due to road works.", "CreatedDate": "2026-09-18 06:40:00"}
+    ]
+  }
+}

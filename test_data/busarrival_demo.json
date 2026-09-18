@@ -1,0 +1,35 @@
+{
+ "_note": "TEST DATA (replay). Same shape as LTA DataMall v3 BusArrival. Not live.",
+ "BusStopCode": "65009",
+ "Services": [
+  {
+   "ServiceNo": "83",
+   "Operator": "SBST",
+   "NextBus": {
+    "OriginCode": "65009",
+    "DestinationCode": "65009",
+    "EstimatedArrival": "2026-09-18T08:03:00+08:00",
+    "Monitored": 1,
+    "Latitude": "1.40",
+    "Longitude": "103.90",
+    "VisitNumber": "1",
+    "Load": "SEA",
+    "Feature": "WAB",
+    "Type": "DD"
+   },
+   "NextBus2": {
+    "EstimatedArrival": "2026-09-18T08:11:00+08:00",
+    "Monitored": 0,
+    "Load": "SDA",
+    "Feature": "WAB",
+    "Type": "SD"
+   },
+   "NextBus3": {
+    "EstimatedArrival": "",
+    "Load": "",
+    "Feature": "",
+    "Type": ""
+   }
+  }
+ ]
+}

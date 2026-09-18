@@ -1,0 +1,11 @@
+# secrets
+.env
+# python
+__pycache__/
+*.pyc
+.venv/
+venv/
+# tools downloaded by tools/get_map.py
+tools/bin/
+# OSRM data and routing files (large, rebuilt from tools/get_osm.py)
+osrm/

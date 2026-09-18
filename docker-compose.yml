@@ -1,0 +1,29 @@
+# Street routing on OpenStreetMap data: one OSRM server for walking, one for cycling.
+# First run: python tools/get_osm.py   (downloads the OSM extract into osrm/)
+# Then:      docker compose up -d      (first start builds the routing files; this takes a while)
+services:
+  osrm-foot:
+    image: ghcr.io/project-osrm/osrm-backend
+    volumes:
+      - ./osrm/foot:/data
+    ports:
+      - "5001:5000"
+    command: >
+      sh -c "test -f /data/.ready ||
+             (osrm-extract -p /opt/foot.lua /data/sg.osm.pbf &&
+              osrm-partition /data/sg.osrm && osrm-customize /data/sg.osrm && touch /data/.ready);
+             exec osrm-routed --algorithm mld /data/sg.osrm"
+    restart: unless-stopped
+
+  osrm-bike:
+    image: ghcr.io/project-osrm/osrm-backend
+    volumes:
+      - ./osrm/bike:/data
+    ports:
+      - "5002:5000"
+    command: >
+      sh -c "test -f /data/.ready ||
+             (osrm-extract -p /opt/bicycle.lua /data/sg.osm.pbf &&
+              osrm-partition /data/sg.osrm && osrm-customize /data/sg.osrm && touch /data/.ready);
+             exec osrm-routed --algorithm mld /data/sg.osrm"
+    restart: unless-stopped

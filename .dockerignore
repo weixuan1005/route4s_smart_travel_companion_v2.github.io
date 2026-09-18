@@ -1,0 +1,6 @@
+.env
+.git
+osrm/
+tools/bin/
+tests/
+**/__pycache__/
