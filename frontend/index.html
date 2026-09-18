@@ -807,9 +807,15 @@ function nav(leg, i, dest){
 }
 
 /* ---------- Itinerary engine (rule-based stand-in for the AI planner) ---------- */
+/* The day starts now, rounded up to the next five minutes so it reads like a plan rather
+   than a stopwatch. It used to start at a hardcoded 10:00, which left every time in the
+   itinerary - and every "leave by" the watch showed - unrelated to the clock beside it. */
+const dayStart = () => Math.ceil(nowMin() / 5) * 5;
+
 function plan(){
-  let t = 600, spent = 0, pos = START;
-  const end = 600 + S.hours*60, used = new Set(), stops = [];
+  const t0 = dayStart();
+  let t = t0, spent = 0, pos = START;
+  const end = t0 + S.hours*60, used = new Set(), stops = [];
   let lastFood = -999;
   /* Added: user-chosen destinations come first; the AI fills the rest of the day */
   const must = S.must.map(m => ({...getPlace(m.id), dur:m.dur, must:true})).filter(p => p.id);
@@ -856,7 +862,7 @@ function plan(){
     stops.push({...p, arrive, leave, leg, from:pos, reasons});
     used.add(p.id); spent += p.cost + leg.cost; t = leave; pos = p;
   }
-  return {stops, spent, endTime:t, unfit:[...unfit.values()]};
+  return {stops, spent, startTime:t0, endTime:t, unfit:[...unfit.values()]};
 }
 /* Added: any place or any MRT station can be a destination */
 function getPlace(id){
@@ -969,7 +975,7 @@ function viewPlan(){
     <input type="range" id="budget" min="10" max="200" step="5" value="${S.budget}" aria-label="Budget in dollars">
     <div class="row" style="margin-top:10px"><h3>Time available</h3><span class="val">${S.hours} hours</span></div>
     <input type="range" id="hours" min="3" max="11" step="1" value="${S.hours}" aria-label="Hours available">
-    <div class="meta">Starting 10:00 from your hotel at Bayfront</div>
+    <div class="meta">Starting ${fmt(dayStart())} from your hotel at Bayfront</div>
     <h3 style="margin-top:12px">How far to travel</h3>
     <div class="chips">${[["near","Nearby"],["city","Across the city"],["island","Island-wide"]].map(([k, l]) => `<button class="chip" data-reach="${k}" aria-pressed="${S.reach===k}">${l}</button>`).join("")}</div>
     <div class="meta" style="margin-top:4px">${{near:"Keeps AI picks close to the city centre.", city:"Balances travel time with what you like.", island:"AI suggests further spots like Punggol, Woodlands, Changi and Jurong."}[S.reach]}</div>
@@ -2360,7 +2366,10 @@ function arrive(){
 
 function startTrip(){
   S.trip = freshTrip(); S.trip.active = true;
-  S.clockMin = S.tripStartMin ?? nowMin(); S.tripStartMin = null; S.watchPage = 0; S.dayDone = 0;
+  /* The simulated trip runs on the clock its plan was built for, so "leave by" and every
+     arrival on the watch stay true to the itinerary rather than to the moment Start was
+     tapped. The commute planner already sets tripStartMin this way. */
+  S.clockMin = S.tripStartMin ?? (S.itinerary && S.itinerary.startTime) ?? nowMin(); S.tripStartMin = null; S.watchPage = 0; S.dayDone = 0;
   addFeed(`Trip started, ${S.itinerary.stops.length} stops today`);
   if (!S.offline) addFeed("Thunderstorm expected 3–5pm. Indoor stops are scheduled then.", "warn");
   disruptions().forEach(D => addFeed(`${LINES[D.line].name} disrupted between ${D.from} and ${D.to}`, "bad"));
@@ -3401,7 +3410,7 @@ function startPlannedTrip(op){
   const stop = {id: "trip", name: T.to.name, short: T.to.name, env: "indoor", cost: 0, dur: 0, tags: [],
     x: D.x, y: D.y, arrive: op.depart + op.mid, leave: op.depart + op.mid, leg: op.leg,
     from: {x: O.x, y: O.y, short: T.from.name}, reasons: []};
-  S.itinerary = {stops: [stop], spent: 0, endTime: op.depart + op.mid, fromTrip: true};
+  S.itinerary = {stops: [stop], spent: 0, startTime: op.depart, endTime: op.depart + op.mid, fromTrip: true};
   S.tripStartMin = Math.round(op.depart);
   startTrip();
 }

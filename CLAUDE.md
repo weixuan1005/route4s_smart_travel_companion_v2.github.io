@@ -95,6 +95,12 @@ One IIFE in `index.html`. Key parts, in order:
   00:00-23:59, so a trip running past midnight reads 01:00 rather than 25:00.
 - `samePlace()` is 50 m; `computeOptions()` returns no options when start and destination
   are the same, and the trip panel says so instead of offering a nought-minute walk.
+- One clock, everywhere. `dayStart()` (now, rounded up to five minutes) anchors the tourist
+  itinerary, which used to start at a hardcoded 10:00 while the clock beside it read the real
+  time - so the watch would say "Leave by 11:35" at 14:13. `startTrip()` takes its clock from
+  `S.tripStartMin` (commute planner) or `S.itinerary.startTime` (tourist planner), so a
+  simulated trip runs on the clock its plan was built for. Times are absolute minutes
+  throughout and only wrap at display, so a plan crossing midnight stays ordered.
 
 ## Status
 
