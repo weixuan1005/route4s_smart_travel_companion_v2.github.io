@@ -28,6 +28,21 @@ ROOT = Path(__file__).resolve().parent.parent
 OSRM = ROOT / "osrm"
 
 
+def usable_pbf(path):
+    """Is this a whole .osm.pbf, or the remains of an interrupted download?
+
+    An earlier version kept whatever arrived and this function did not exist, so a partial
+    file was reused on every later run and the same failure repeated. A real extract starts
+    with an OSMHeader block and is far larger than anything a broken download leaves."""
+    try:
+        if path.stat().st_size < 50_000_000:
+            return False
+        with open(path, "rb") as f:
+            return b"OSMHeader" in f.read(64)
+    except OSError:
+        return False
+
+
 def download(dest):
     """Fetch the extract, and refuse to keep a partial one.
 
@@ -69,6 +84,9 @@ def main():
 
     OSRM.mkdir(exist_ok=True)
     raw = OSRM / "malaysia-singapore-brunei-latest.osm.pbf"
+    if raw.exists() and not usable_pbf(raw):
+        print(f"The extract already here is not usable ({raw.stat().st_size / 1e6:.0f} MB); downloading it again.")
+        raw.unlink()
     if not raw.exists():
         download(raw)
     source = raw
