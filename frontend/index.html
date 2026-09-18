@@ -3424,7 +3424,7 @@ function liveSettingsPanels(){
     <h3>Live data</h3>
     ${!st ? `<div class="meta">${LIVE.checked ? "No backend found, so the app runs on built-in and simulated data. See the README to start the backend." : "Checking the backend…"}</div>` : `
       ${row("LTA DataMall (alerts, crowding, bus arrivals, bike parking)", st.datamall, st.datamall ? "Key set" : "No key")}
-      ${row("Weather (data.gov.sg)", true, "No key needed")}
+      ${row("Weather (data.gov.sg)", true, st.weather_key ? "Key set · higher limit" : "No key needed")}
       ${row("Street routing (OSRM)", st.osrm, st.osrm ? "Configured" : "Estimates")}
       <div class="toggle"><div><b>Use test data</b><div class="meta">${st.datamall ? "Replay recorded scenarios instead of live feeds" : "On because no DataMall key is set"}</div></div><button class="switch" role="switch" id="useTest" aria-checked="${mode === "test"}" aria-label="Use test data" ${st.datamall ? "" : "disabled"}></button></div>
       <div class="meta">Now using: <b>${mode === "live" ? "live LTA feeds" : "test data (labelled in the app)"}</b>${LIVE.alertsAt ? ` · alerts checked ${new Date(LIVE.alertsAt).toTimeString().slice(0, 5)}` : ""}${LIVE.alertsError ? ` · ${esc(LIVE.alertsError)}` : ""}</div>`}

@@ -51,4 +51,5 @@ def test_live_without_key_says_unavailable():
     assert client.get("/api/bus-arrival").status_code == 400
     s = client.get("/api/status").json()
     assert s["datamall"] is False and "pcd_arjun_morning" in s["replays"]["crowd"]
+    assert s["weather"] is True and s["weather_key"] is False  # weather works, but no key is set
     assert client.get("/api/bus-arrival", params={"replay": "../backend/main"}).status_code == 404

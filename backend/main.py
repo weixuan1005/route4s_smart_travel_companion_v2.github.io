@@ -52,6 +52,7 @@ def health():
         "map_file": MAP_FILE.exists(),
         "map_file_mb": round(MAP_FILE.stat().st_size / 1e6, 1) if MAP_FILE.exists() else 0,
         "datamall_key_set": bool(os.getenv("LTA_ACCOUNT_KEY")),  # never return the key itself
+        "datagov_key_set": bool(os.getenv("DATAGOV_API_KEY")),
         "replays": alerts.replay_names(),
         "osrm_foot_url_set": bool(os.getenv("OSRM_FOOT_URL")),
         "osrm_bike_url_set": bool(os.getenv("OSRM_BIKE_URL")),
@@ -185,6 +186,7 @@ def status():
     return {
         "datamall": datamall.has_key(),
         "weather": True,  # data.gov.sg works without a key
+        "weather_key": bool(os.getenv("DATAGOV_API_KEY")),  # only raises the rate limit
         "osrm": bool(os.getenv("OSRM_FOOT_URL") and os.getenv("OSRM_BIKE_URL")),
         "replays": {"alerts": alerts.replay_names(), "crowd": live.replays("pcd_"), "weather": live.replays("weather_"),
                     "bike_parking": live.replays("bikeparking_"), "bus_arrival": live.replays("busarrival_")},
