@@ -1,114 +1,293 @@
 # Smart Commuter Companion
 
-LTA Smart Mobility Hackathon, Problem Statement 2. A mobile-first web app that plans
-door-to-door commutes and reroutes around disruptions.
+A phone-first web app that plans a door-to-door commute in Singapore and changes its advice
+when the network does — a train disruption, a crowded platform, rain on the cycling leg, or
+road works that were announced last week.
 
-**Persona:** Arjun, a multi-modal commuter from Punggol to one-north who cycles to the LRT
-and cares about crowding, sheltered routes and bringing his bike.
+Built for the **LTA Smart Mobility Hackathon, Problem Statement 2**, around one commuter:
+**Arjun**, who travels Punggol → one-north, cycles to the LRT, and would rather leave twenty
+minutes later than stand in a crush.
 
-> Status: **Phase 4** — phone-first layout, OpenStreetMap map, door-to-door trip planning,
-> live conditions (disruptions, crowding, rain, bus arrivals, bike parking) and Arjun's
-> morning check with alerts. Offline caching, accessibility review and the write-up come next.
-> Anything marked **Test data** in the app is injected for demonstration, not live.
+---
 
-## Run it (clean machine)
+## Quickest look: no installing anything
 
-Requirements: **Python 3.10 or newer** and internet access. Steps 1-5 are the whole path
-from a fresh clone to the app open in a browser. Everything after them is optional.
+**<https://weixuan1005.github.io/route4s_smart_travel_companion_v2.github.io/>**
+
+Open it on your phone. Route planning, the disruption rerouting, the sheltered walkways and
+the demo scenarios all work there.
+
+The street map is a large file the browser reads in pieces, which not every host serves. If
+the map shows only coloured lines and stations on a plain background, that is what happened —
+the version you run yourself, below, always has it.
+
+What you will **not** get there: live LTA data. That needs the small server described below,
+because the key that talks to LTA must not live in a web page. Everything on that page that
+isn't live is labelled **Test data** or **simulated**, never dressed up as real.
+
+---
+
+## Full version on your own computer
+
+This part uses **Terminal**, the app where you type commands instead of clicking. If you have
+never opened it, that is fine — everything you need is below, in order.
+
+**How to open Terminal (Mac):** press **Cmd + Space**, type `Terminal`, press **Enter**.
+A window opens with a line of text ending in `%`. That is the prompt; it means it is waiting
+for you.
+
+**How to run a command:** copy a grey line from this page, paste it into Terminal
+(**Cmd + V**), press **Enter**, and wait until the `%` prompt comes back before doing the next
+one. Some commands print a lot, some print nothing — **printing nothing usually means it
+worked**. Only stop if you see the word `error` or `fatal`.
+
+Total time: about ten minutes, most of it waiting for downloads.
+
+### Step 1 — check you have a recent Python
 
 ```bash
-# 1. Get the code
-git clone <your-repo-url> route4us
+python3 --version
+```
+
+If it prints **3.10 or higher**, skip to Step 2.
+
+If it prints **3.9** (what Macs come with) it is too old and the app will not start. Install a
+newer one — the first line installs Homebrew, a tool that installs other tools, and it will
+ask for your Mac password:
+
+```bash
+/bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)"
+```
+
+```bash
+brew install python@3.12
+```
+
+Then use `python3.12` everywhere this page says `python3`.
+
+### Step 2 — download the app
+
+```bash
+mkdir -p ~/Developer && cd ~/Developer
+```
+
+```bash
+git clone https://github.com/weixuan1005/route4s_smart_travel_companion_v2.github.io.git route4us
+```
+
+```bash
 cd route4us
-
-# 2. Check your Python before anything else
-python3 --version                  # must be 3.10 or newer
 ```
 
-macOS ships 3.9, which **cannot** run this code: `backend/main.py` uses `str | None` in
-FastAPI signatures, so on 3.9 the server stops at import with
-`TypeError: unsupported operand type(s) for |: 'type' and 'NoneType'`. Install a current
-Python first, then use `python3.12` wherever `python3` appears below:
+You now have a folder called **route4us** in your home folder, and Terminal is "inside" it.
+Every later command assumes that. If you close Terminal and come back, get back there with
+`cd ~/Developer/route4us`.
+
+### Step 3 — install what the app needs
 
 ```bash
-brew install python@3.12           # macOS
-```
-
-```bash
-# 3. Virtual environment and dependencies
 python3 -m venv .venv
-source .venv/bin/activate          # Windows: .venv\Scripts\activate
-python --version                   # confirm 3.10+ INSIDE the venv before going on
-pip install -r backend/requirements.txt
-
-# 4. Settings file
-cp .env.example .env               # Windows: copy .env.example .env
 ```
 
-Put your LTA DataMall AccountKey in `.env` as `LTA_ACCOUNT_KEY=...`. Edit the file in an
-editor rather than appending with `echo`, which would leave the key in your shell history.
-The key is optional: without it the app runs on the labelled replays in `test_data/`.
-Check that the key reaches LTA before starting the server — it prints OK or the exact error
-per feed, and never prints the key itself:
+```bash
+source .venv/bin/activate
+```
+
+Your prompt now starts with `(.venv)`. That means the app's own private set of tools is
+active. **Every new Terminal tab needs this line again.**
+
+```bash
+pip install -r backend/requirements.txt
+```
+
+This prints several pages and takes a minute.
+
+### Step 4 — start it
+
+```bash
+uvicorn backend.main:app --host 0.0.0.0 --port 8000
+```
+
+You should see `Uvicorn running on http://0.0.0.0:8000`. **Leave this window alone** — this is
+the app running. It stays there, and that is correct.
+
+Open **<http://localhost:8000>** in your browser. That's it, the app is working.
+
+To stop it later, click that Terminal window and press **Ctrl + C**.
+
+### Step 5 — open it on your phone (optional)
+
+With your phone on the same Wi-Fi, open a **new** Terminal tab (**Cmd + T**) and run:
+
+```bash
+cd ~/Developer/route4us && source .venv/bin/activate
+```
+
+```bash
+ipconfig getifaddr en0 || ipconfig getifaddr en1
+```
+
+It prints an address like `192.168.1.42`. On your phone, browse to `http://192.168.1.42:8000`.
+The first time, macOS asks whether to allow incoming connections — say yes, or the phone
+cannot reach it.
+
+---
+
+## Making it show real data
+
+The app already includes the street map, the real bus network and the covered walkways. Two
+things are not included and need you: the LTA key, and street-level routing. Run these in the
+second Terminal tab, from the `route4us` folder with `(.venv)` showing.
+
+### Live LTA data (train disruptions, crowding, bus arrivals, bike racks)
+
+Get a free AccountKey from **<https://datamall.lta.gov.sg>** — register, then request API
+access; the key arrives by email.
+
+```bash
+cp .env.example .env
+```
+
+```bash
+open -e .env
+```
+
+That opens a small settings file in TextEdit. Find the line starting `LTA_ACCOUNT_KEY=` and
+paste your key straight after the `=`, with no spaces. Save (**Cmd + S**) and close.
+
+> Type the key into the file rather than using a Terminal command, so it is not left behind
+> in your command history. The file is never uploaded to GitHub.
+
+Check LTA accepts it:
 
 ```bash
 python tools/check_live.py
 ```
 
-```bash
-# 5. Start the server
-uvicorn backend.main:app --host 0.0.0.0 --port 8000
-```
+Every line should say `OK`. A brand-new key is sometimes refused for a while — if you get
+`401` or `403`, wait and run it again. Then **restart the app**: click the first Terminal
+window, press **Ctrl + C**, and start it again with the command from Step 4.
 
-Now open **<http://localhost:8000>**.
+In the app, **Settings → Live data** now says *Key set*, and you can switch **Use test data**
+off.
 
-Leave the server running, and use that address rather than opening `frontend/index.html`
-directly: the same server answers both the app and `/api/*`, and the app calls the API with
-a *relative* URL. Opened as a `file://` path, or from static hosting such as GitHub Pages,
-you get the app but no live data at all.
+### The street map, bus routes and sheltered walkways: already included
 
-To see what the server picked up:
+These three ship with the download, so there is nothing to do:
 
-```bash
-curl -s http://localhost:8000/api/health    # datamall_key_set: true once your key is in .env
-```
+| What | File | What it gives you |
+|---|---|---|
+| OpenStreetMap street map of Singapore | `frontend/map/singapore.pmtiles` | Real streets, water and parks under the route |
+| LTA bus stops and routes | `frontend/busdata.json` | Real bus services instead of invented ones |
+| Covered walkways | `frontend/covered.json` | How much of a walk is under shelter |
 
-**Settings -> Live data** in the app shows the same thing. With a key set, the
-**Use test data** switch becomes available; turn it off to use live feeds. Without a key it
-stays on and says why.
+**Settings** shows a row for each, saying whether it is really installed — so what is on
+screen is what you actually have.
 
-### Optional extras
-
-None of these are needed to open the app. Each replaces a labelled fallback with real data.
-Restart the server after the first two so it serves the new files.
+They are snapshots, so run these only when you want fresher data:
 
 ```bash
-python tools/get_map.py                                             # offline OpenStreetMap basemap -> frontend/map/singapore.pmtiles
-python tools/fetch_bus_data.py --no-key --out frontend/busdata.json  # real LTA bus stops and routes
-python tools/get_covered.py                                         # sheltered walkways from OpenStreetMap -> frontend/covered.json
-python tools/get_osm.py                                             # OSM extract for OSRM (add --clip if osmium is installed)
-docker compose up -d                                                # OSRM walking + cycling; the first start builds routing files and takes several minutes
-curl "http://localhost:5001/route/v1/foot/103.8965,1.4102;103.9024,1.4053"   # should answer "code":"Ok"
+python tools/get_map.py
 ```
-
-Without the map file the map says so and draws lines and stations only. Without OSRM,
-walking and cycling legs are straight-line estimates and the app labels them
-**Street legs estimated**. Without `covered.json` the app never claims a walk is sheltered;
-with it, the covered network is drawn on the map and each walking leg says how much of it
-runs under shelter. Settings reports which of these are installed, so what you see is what
-is really there.
-
-One thing to watch: `/api/health` reports `osrm_foot_url_set: true`, and Settings shows
-street routing as "Configured", as soon as `.env` exists - `.env.example` already carries
-both OSRM URLs. That reflects the URLs being set, not OSRM answering. The real check is a
-street leg:
 
 ```bash
-curl -s "http://localhost:8000/api/route?mode=bike&from=1.4102,103.8965&to=1.4053,103.9024"
+python tools/fetch_bus_data.py --no-key --out frontend/busdata.json
 ```
 
-`"source": "osrm"` is real street routing on OpenStreetMap; `"source": "estimate"` means
-OSRM is not reachable and the app is saying so rather than guessing quietly.
+```bash
+python tools/get_covered.py
+```
+
+### Street-level walking and cycling routes (needs Docker)
+
+Without this, walking and cycling legs are straight lines between two points, drawn dashed
+and labelled **Street legs estimated**. With it, they follow real streets and cycle paths.
+
+Install Docker Desktop, then **open it from Applications** — the app has to be running, not
+just installed:
+
+```bash
+brew install --cask docker
+```
+
+```bash
+brew install osmium-tool
+```
+
+```bash
+python tools/get_osm.py --clip
+```
+
+Downloads the OpenStreetMap data. `--clip` (which needs `osmium-tool` above) trims it to
+Singapore and makes the next step far faster; without it you download 400+ MB.
+
+```bash
+docker compose up -d
+```
+
+The first run builds the routing data and takes several minutes, looking idle while it works.
+Check it when it finishes:
+
+```bash
+curl "http://localhost:5001/route/v1/foot/103.8965,1.4102;103.9024,1.4053"
+```
+
+You want `"code":"Ok"` in the reply. Refresh the app and the note under the map changes to
+*"Cycling and walking legs follow OpenStreetMap streets"*.
+
+Turn the routing servers off again with `docker compose down`.
+
+---
+
+## If something goes wrong
+
+| What you see | What to do |
+|---|---|
+| `command not found: python3` | Install Python — Step 1 |
+| `TypeError: unsupported operand type(s) for \|` | Your Python is 3.9 — redo Step 1, then Step 3 |
+| `command not found: uvicorn` | The `(.venv)` is missing — run `source .venv/bin/activate` |
+| `Address already in use` | It is already running in another window. Use that one, or `lsof -ti:8000 \| xargs kill` |
+| `externally-managed-environment` | You skipped the virtual environment — redo Step 3 |
+| Browser says "can't connect" | The Terminal window running the app was closed or stopped — redo Step 4 |
+| Settings says "No backend found" | You opened the file directly instead of `http://localhost:8000` |
+| `Cannot connect to the Docker daemon` | Docker Desktop is installed but not open — launch it from Applications |
+
+---
+
+## Using the app
+
+1. **Trip** opens first. From is Home (near Sumang LRT), To is Work (Fusionopolis). Search any
+   address, place or station, or use **📍 My location**.
+2. Pick **Leave now**, **Leave at** or **Arrive by**, and whether you are bringing a bike and
+   whether it folds. A non-folding bike rules out the bus, and the app says so.
+3. **Find routes** shows the options. The chips above the map — **All, Train, Bus, Cycle,
+   Walk only** — filter to one way of travelling, each with how many options it has.
+4. The map draws the chosen route in colour and the others in grey. Dashed cycling and walking
+   lines mean straight-line estimates; solid means real street routing.
+5. Each option lists **why**: "Busy platform at Punggol around 08:13 (High, forecast)". Tags
+   like **Best for Arjun** and **Fastest** say what it was chosen for.
+6. **Start this trip** hands over to **Navigate** for turn-by-turn steps.
+7. **Morning check**, at the top, tries a departure every 10 minutes across your window and
+   either confirms your usual time or suggests a better one, with reasons. **My routine** sets
+   the days, the window and the alert threshold.
+8. During a disruption the planner avoids the closed stretch, and when LTA's feed lists a free
+   bridging bus it offers the usual route with that bus in between.
+9. **Weather now** shows the two-hour forecast for both ends of the trip. **Planned works**
+   shows road works, lift maintenance and bus route changes, marked **On your route** when a
+   station, line or bus service you use is named, or **Named nearby** when only the name
+   matches.
+
+Notifications appear while the app is open or in a background tab. Alerts with the app fully
+closed would need a push server, which is not built.
+
+The home and work locations are a demo profile: public places, not anyone's address. Nothing
+about a trip leaves your own server except the start and end points needed for place search
+and street routing.
+
+`WRITEUP.md` covers the persona, the architecture, where each estimated number came from, and
+the limits we know about.
+
+---
 
 ### Check the data layer
 
@@ -143,22 +322,6 @@ the page already holds and the rest of the journey stays readable.
 
 Service workers need HTTPS or localhost. On a plain-http address the app still runs, without
 the offline cache.
-
-### Open it on your phone
-
-- **Same Wi-Fi, quick check:** find your computer's address on the network and open it on
-  the phone:
-
-  ```bash
-  ipconfig getifaddr en0 || ipconfig getifaddr en1   # macOS, e.g. 192.168.1.42
-  ```
-
-  Then browse to `http://192.168.1.42:8000`. Enough to test the layout and live data.
-  macOS asks to allow incoming connections the first time; allow it or the phone cannot
-  reach the server.
-- **For judging:** use HTTPS. Offline caching, location and notifications (later phases)
-  only work over HTTPS. Deploy the backend to an HTTPS host (for example Google Cloud Run),
-  or expose it through an HTTPS tunnel.
 
 ## Put the backend online (HTTPS, for phones and judges)
 
@@ -232,36 +395,6 @@ can still switch to test data there, for a repeatable demo.
 | `weather_punggol_showers` | Showers over Punggol and Sengkang 07:30–09:30 |
 | `bikeparking_sumang` | 40 sheltered racks at Sumang LRT |
 | `planned_arjun_week` | A lift out at Punggol, works on Punggol Way, and a bus route change and road opening starting in three days |
-
-## Using the app (Arjun's journey)
-
-1. **Trip** (opens first): From is Home (near Sumang LRT), To is Work (Fusionopolis, one-north).
-   Search any address, place or station, or use **📍 My location** (needs HTTPS).
-2. Choose **Leave now**, **Leave at** or **Arrive by**, and whether Arjun brings his bike
-   and whether it folds.
-3. **Find routes** lists options with a time range, the arrival window, changes and tags
-   such as **Best for Arjun** and **Fastest**. The map shows the chosen route in colour
-   and the others in grey.
-4. **Start this trip** hands over to **Navigate** with turn-by-turn steps on phone and watch.
-5. **Today's conditions** lists disruptions, rain and busy platforms. Each option shows its
-   reasons ("Busy platform at Punggol around 08:13 (High, forecast)"), and when conditions
-   change the ranking the app says what it was ranked above and why.
-6. During a disruption the planner avoids the closed stretch and, when the feed lists a free
-   bridging bus, offers the usual route with the bridging bus in between.
-7. **Morning check** (top of Trip) tries departures every 10 minutes in Arjun's window and
-   either confirms the usual time or suggests another (e.g. "Leave at 08:50 instead of 08:00")
-   with reasons. **My routine** sets the days, the window, the alert threshold and phone
-   notifications. The check runs by itself 45 minutes before the window while the app is open.
-
-Notifications are shown while the app is open (or in a background tab). Alerts when the app
-is fully closed would need Web Push with a push server, which is not built.
-
-The home and work locations are a demo profile for the persona: public places, not a real
-person's address. Nothing about trips is sent anywhere except the start and end points
-needed for place search and street routing on your own backend.
-
-`WRITEUP.md` covers the persona, the architecture, where each number below came from, and
-the limits we know about.
 
 ## Timing assumptions (trip planner)
 
