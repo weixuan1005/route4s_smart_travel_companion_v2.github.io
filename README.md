@@ -27,6 +27,83 @@ isn't live is labelled **Test data** or **simulated**, never dressed up as real.
 
 ---
 
+## Contents
+
+**Just want to see it?** [Open it in a browser](#quickest-look-no-installing-anything) — nothing to install.
+
+**Want the full thing running?** [How it works](#how-it-works) · [Install and run](#full-version-on-your-own-computer) · [Add live LTA data](#live-lta-data-train-disruptions-crowding-bus-arrivals-bike-racks) · [Street routing](#street-level-walking-and-cycling-routes-needs-docker)
+
+**Using it:** [Every command in one place](#every-command-in-one-place) · [Using the app](#using-the-app) · [When something breaks](#if-something-goes-wrong)
+
+**Putting it online:** [Deploy to Google Cloud](#put-it-on-google-cloud-https-for-phones-and-judges)
+
+**Reference:** [API endpoints](#api-endpoints-and-the-tests) · [Offline behaviour](#underground-with-no-signal) · [Project layout](#project-layout) · [What needs a key](#live-data-what-needs-a-key) · [Test data](#test-data-the-demo-panel) · [Timing assumptions](#timing-assumptions-trip-planner) · [Attribution](#map-and-attribution) · [Secrets](#secrets)
+
+---
+
+## How it works
+
+Three pieces, and you only need the first to see something:
+
+```
+  your phone or browser
+          │
+          │  one address serves both the app and the data,
+          │  so there is no cross-origin setup to get wrong
+          ▼
+  backend  (Python, FastAPI)          ← holds the LTA key, talks to the feeds
+          │
+          ├── LTA DataMall       disruptions, crowding, bus arrivals, bike racks, planned works
+          ├── data.gov.sg        two-hour rain forecast
+          ├── OneMap             address search
+          └── OSRM (optional)    real walking and cycling routes, in Docker
+          │
+          ▼
+  frontend/index.html                 ← the whole app, one file, no build step
+  frontend/map/singapore.pmtiles      ← OpenStreetMap basemap, served from this repo
+```
+
+**Why there is a backend at all.** The LTA key must never reach a web page — anyone could
+read it. The backend keeps it, calls LTA, and passes on only the answer. `/api/*` will tell
+you *whether* a key is set, never what it is.
+
+**Why the app is one file.** No build step, no `npm install`, nothing to compile. Open
+`frontend/index.html` and the whole app is there. It runs from any static host; the backend
+adds the live data on top.
+
+**What happens without a key.** Nothing breaks. The app falls back to the labelled replays in
+`test_data/` and marks everything **Test data** or **simulated** on screen. It never presents
+a guess as a live reading — the hackathon brief caps scores for that, and it would be
+dishonest anyway.
+
+**What happens without Docker.** Walking and cycling legs become straight lines × a fixed
+factor, drawn dashed and badged **Street legs estimated**. With Docker running OSRM they
+follow real streets and cycle paths.
+
+---
+
+## Every command in one place
+
+Once you have done the install steps below, this is the whole day-to-day set. Run them from
+the `route4us` folder. The Python ones need `(.venv)` showing in your prompt first; `git` and
+`docker` do not care.
+
+| Command | What it does |
+|---|---|
+| `source .venv/bin/activate` | Wakes up the app's tools. **Every new Terminal tab needs this.** |
+| `uvicorn backend.main:app --host 0.0.0.0 --port 8000` | Starts the app at <http://localhost:8000>. Ctrl + C stops it |
+| `python3 tools/check_live.py` | Asks every live feed for a sample and prints OK or the error |
+| `python3 -m pytest -q` | Runs the 23 automated tests |
+| `docker compose up -d` | Starts street routing (OSRM). `docker compose down` stops it |
+| `git pull origin main` | Gets the latest version of the code |
+| `python3 tools/get_map.py` | Refreshes the OpenStreetMap basemap |
+| `python3 tools/fetch_bus_data.py --no-key --out frontend/busdata.json` | Refreshes bus stops and routes |
+| `python3 tools/get_covered.py` | Refreshes the sheltered walkway data |
+
+Deploying to Google Cloud has [its own section](#put-it-on-google-cloud-https-for-phones-and-judges).
+
+---
+
 ## Full version on your own computer
 
 This part uses **Terminal**, the app where you type commands instead of clicking. If you have
@@ -302,7 +379,7 @@ the limits we know about.
 
 ---
 
-### Check the data layer
+### API endpoints, and the tests
 
 ```bash
 pip install pytest
@@ -514,17 +591,14 @@ tools/fetch_bus_data.py  bus stops and routes (LTA DataMall key, or --no-key)
 | OneMap search | none | Address search |
 | OSRM (your Docker) | none | Walking and cycling legs on OpenStreetMap |
 
-Check every source in one go (after putting the key in `.env`):
-
-```bash
-python3 tools/check_live.py
-```
+Check every source in one go with `python3 tools/check_live.py` (see
+[Live LTA data](#live-lta-data-train-disruptions-crowding-bus-arrivals-bike-racks)).
 
 **Settings → Live data** shows what is connected. Without a DataMall key the app uses the
 labelled replays in `test_data/` and says **Test data** wherever they appear. With a key you
 can still switch to test data there, for a repeatable demo.
 
-### Test data (demo panel → 🧪 Demo)
+### Test data: the Demo panel
 
 | Button / file | Scenario |
 |---|---|
