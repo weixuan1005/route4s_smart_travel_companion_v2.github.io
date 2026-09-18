@@ -231,6 +231,8 @@ Singapore and makes the next step far faster; without it you download 400+ MB.
 docker compose up -d
 ```
 
+Or run `docker compose up` without `-d` to watch it work instead of guessing.
+
 The first run builds the routing data and takes several minutes, looking idle while it works.
 Check it when it finishes:
 
@@ -258,6 +260,7 @@ Turn the routing servers off again with `docker compose down`.
 | Settings says "No backend found" | You opened the file directly instead of `http://localhost:8000` |
 | `zsh: command not found: docker` | Docker is not installed yet — `brew install --cask docker`, then open Docker Desktop from Applications |
 | `Cannot connect to the Docker daemon` | Docker Desktop is installed but not open — launch it from Applications and wait for it to say the engine is running |
+| `unknown shorthand flag: 'd' in -d` | The hyphen was turned into a dash on its way into Terminal. Type `docker compose up -d` by hand, or run `docker compose up` without the flag |
 | `no matching manifest for linux/arm64` | The OSRM image is Intel-only. In Docker Desktop, Settings → General, tick **Use Rosetta for x86/amd64 emulation**, then try again |
 
 ---
