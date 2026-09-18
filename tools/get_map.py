@@ -32,6 +32,9 @@ PMTILES_VERSION = "1.31.2"
 RELEASES = f"https://github.com/protomaps/go-pmtiles/releases/download/v{PMTILES_VERSION}/"
 BUILDS = "https://build.protomaps.com/"
 BBOX = "103.59,1.16,104.09,1.48"  # Singapore, including Tuas, Changi and the offshore islands
+# Say who we are. Content delivery networks routinely refuse the default "Python-urllib/x.y",
+# which comes back as 403 on every request and looks exactly like "no build exists".
+UA = {"User-Agent": "smart-commuter-companion/1.0 (LTA hackathon entry)"}
 
 ROOT = Path(__file__).resolve().parent.parent
 BIN_DIR = ROOT / "tools" / "bin"
@@ -57,7 +60,7 @@ def get_tool():
         return exe
     name = asset_name()
     print(f"Downloading pmtiles tool ({name})...")
-    data = urllib.request.urlopen(RELEASES + name, timeout=120).read()
+    data = urllib.request.urlopen(urllib.request.Request(RELEASES + name, headers=UA), timeout=120).read()
     BIN_DIR.mkdir(parents=True, exist_ok=True)
     if name.endswith(".zip"):
         with zipfile.ZipFile(io.BytesIO(data)) as z:
@@ -75,7 +78,7 @@ def build_exists(url):
     """Is this build there? Asks for a single byte rather than sending HEAD, because some CDNs
     refuse HEAD outright - and a refused HEAD looks exactly like a missing file. Returns the
     status so the caller can tell "not there yet" (404) from "not allowed" (403/405)."""
-    req = urllib.request.Request(url, headers={"Range": "bytes=0-0"})
+    req = urllib.request.Request(url, headers={**UA, "Range": "bytes=0-0"})
     try:
         with urllib.request.urlopen(req, timeout=20) as r:
             return r.status in (200, 206), r.status
@@ -99,8 +102,9 @@ def latest_build(days=14):
 
     codes = sorted(set(seen))
     detail = f"every request came back {codes[0]}" if len(codes) == 1 else f"requests came back {codes}"
-    hint = ("The server is refusing these requests rather than saying the file is missing, so the "
-            "builds may have moved or your network may be blocking them."
+    hint = ("The server is refusing these requests rather than saying the file is missing. Check whether "
+            "the same URL works in a browser or with curl -sI; if it does, something between you and the "
+            "server is rejecting this client."
             if codes and codes[0] in (401, 403, 405, 451) else
             "The daily builds may have been renamed or pruned.")
     sys.exit(f"No build found in the last {days} days ({detail}). {hint}\n"
