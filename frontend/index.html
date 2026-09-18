@@ -680,6 +680,8 @@ let timer = null;
 /* ---------- Helpers ---------- */
 const $ = s => document.querySelector(s);
 const fmt = m => { const h=Math.floor(m/60), mm=Math.floor(m%60); return `${h}:${String(mm).padStart(2,"0")}`; };
+/* "9:00" -> "09:00" for an <input type="time">, which rejects anything else and blanks itself. */
+const padTime = t => { const m = /^(\d{1,2}):(\d{2})$/.exec(String(t || "")); return m ? `${m[1].padStart(2, "0")}:${m[2]}` : t; };
 const dist = (a,b) => Math.hypot(a.x-b.x, a.y-b.y);
 const esc = s => String(s).replace(/[&<>"]/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]));
 function hash(str){ let h=0; for (const c of str) h=(h*31+c.charCodeAt(0))|0; return Math.abs(h); }
@@ -2827,6 +2829,10 @@ const bikeIcon = () => `<svg viewBox="0 0 24 24" fill="none" stroke="#fff" strok
 const llOf = p => [p.lat, p.lon];
 const unitsOf = p => projLL(p.lat, p.lon);
 const hm = m => fmt(((Math.round(m) % 1440) + 1440) % 1440);
+/* Same minute, but as an <input type="time"> accepts it: a browser silently rejects "9:00"
+   and leaves the field empty, so the time you were shown is not the time in the box. */
+const hm24 = m => { const t = ((Math.round(m) % 1440) + 1440) % 1440;
+  return `${String(Math.floor(t / 60)).padStart(2, "0")}:${String(Math.floor(t % 60)).padStart(2, "0")}`; };
 const nowMin = () => { const d = new Date(); return d.getHours()*60 + d.getMinutes(); };
 const parseHM = t => { const m = /^(\d{1,2}):(\d{2})$/.exec(t || ""); return m ? +m[1]*60 + +m[2] : nowMin(); };
 
@@ -3154,6 +3160,7 @@ function tripSteps(op){
 
 function viewTrip(){
   const T = tripState();
+  wxEnsure(T);
   const place = (which, label, dot) => `
     <label class="tlabel" for="in-${which}"><span class="pickdot" style="background:${dot}"></span>${label}</label>
     <div class="tplace"><b>${esc(T[which].name)}</b><span class="meta">${esc(T[which].address || "")}</span></div>
@@ -3204,6 +3211,7 @@ function viewTrip(){
   <h2 class="screen-title">Plan a trip</h2>
   <p class="sub">${PERSONA.name} · Punggol → one-north · demo profile</p>
   ${morningCard()}
+  ${weatherPanel(T)}
   <div class="panel">
     ${place("from", "From", "var(--go)")}
     <div class="tquick"><button class="ghost" data-quick="from:home">🏠 Home</button><button class="ghost" data-quick="from:work">🏢 Work</button><button class="ghost" id="tripLocate">📍 My location</button><button class="ghost" id="tripSwap" aria-label="Swap start and destination">⇅</button></div>
@@ -3212,7 +3220,7 @@ function viewTrip(){
   </div>
   <div class="panel">
     <div class="chips">${whenChip("now", "Leave now")}${whenChip("leave", "Leave at")}${whenChip("arrive", "Arrive by")}</div>
-    ${T.when !== "now" ? `<label class="meta" style="display:block;margin-top:8px">${T.when === "leave" ? "Leave at" : "Arrive by"} <input type="time" id="tripTime" class="textin" style="width:auto;margin-left:6px" value="${esc(T.time)}"></label>` : ""}
+    ${T.when !== "now" ? `<label class="meta" style="display:block;margin-top:8px">${T.when === "leave" ? "Leave at" : "Arrive by"} <input type="time" id="tripTime" class="textin" style="width:auto;margin-left:6px" value="${esc(padTime(T.time))}"></label>` : ""}
     <div class="toggle"><div><b>🚲 Bringing my bike</b><div class="meta">Cycle to the station</div></div><button class="switch" role="switch" id="tripBike" aria-checked="${T.bike}" aria-label="Bringing my bike"></button></div>
     ${T.bike ? `<div class="toggle"><div><b>It's a foldable bike</b><div class="meta">Folded bikes up to 120 × 70 × 40 cm can go on trains and buses</div></div><button class="switch" role="switch" id="tripFold" aria-checked="${T.foldable}" aria-label="Foldable bike"></button></div>` : ""}
     <button class="primary" id="tripGo" style="margin-top:10px">Find routes</button>
@@ -3497,6 +3505,54 @@ async function weatherAt(lat, lon){
   LIVE.weather[key] = {at: Date.now(), w: ok};
   return ok;
 }
+/* ---------- Live weather on screen ----------
+   data.gov.sg publishes a two-hour nowcast per area. The planner already used it to rank
+   cycling down in the rain; this shows the reading itself, for both ends of the trip, because
+   rain where Arjun starts and rain where he finishes are different problems. */
+const wxKey = p => `${dataMode()}:${p.lat.toFixed(3)},${p.lon.toFixed(3)}`;
+const wxCached = p => (LIVE.weather[wxKey(p)] || {}).w;
+
+function wxEnsure(T){
+  if (dataMode() === "none") return;
+  [T.from, T.to].forEach(place => {
+    if (LIVE.weather[wxKey(place)] === undefined) weatherAt(place.lat, place.lon).then(w => { if (w) render(); });
+  });
+}
+
+/* Never colour alone: the words carry the meaning and the icon only decorates. */
+const wxIcon = text => {
+  const t = (text || "").toLowerCase();
+  if (t.includes("thunder")) return "⛈️";
+  if (t.includes("shower") || t.includes("rain") || t.includes("drizzle")) return "🌧️";
+  if (t.includes("cloud") || t.includes("overcast")) return "☁️";
+  if (t.includes("hazy") || t.includes("mist") || t.includes("fog")) return "🌫️";
+  if (t.includes("fair") || t.includes("sunny") || t.includes("clear")) return "☀️";
+  return "🌤️";
+};
+
+function weatherPanel(T){
+  if (dataMode() === "none") return "";
+  const a = wxCached(T.from), b = wxCached(T.to);
+  if (!a && !b) return "";
+  const when = (a || b).valid_text || "the next 2 hours";
+  const stamp = (a || b).updated;
+  const line = (label, place, w) => !w ? "" : `
+    <div class="row" style="padding:3px 0">
+      <div><b>${esc(w.area)}</b><div class="meta">${esc(label)} · ${esc(place.name)}</div></div>
+      <div style="text-align:right"><span aria-hidden="true">${wxIcon(w.forecast)}</span>
+        <b>${esc(w.forecast || "No forecast")}</b></div>
+    </div>`;
+  const sameArea = a && b && a.area === b.area;
+  return `
+  <div class="panel">
+    <div class="row"><b>Weather now</b>${sourceTag((a || b).test_data)}</div>
+    ${line("Start", T.from, a)}
+    ${sameArea ? "" : line("Destination", T.to, b)}
+    <div class="meta" style="margin-top:4px">Two-hour forecast for ${esc(when)}${stamp ? ` · read at ${esc(String(stamp).slice(11, 16))}` : ""} · data.gov.sg</div>
+    ${(a && a.rain) || (b && b.rain) ? `<div class="meta">Rain on a cycling leg ranks that option lower.</div>` : ""}
+  </div>`;
+}
+
 async function parkingNear(name){
   if (dataMode() === "none" || !STATIONS[name]) return null;
   const [lat, lon] = toLL(...STATIONS[name]);
@@ -3658,10 +3714,14 @@ function bindRoutine(){
   };
   const ft = $("#rtFromTrip"); if (ft) ft.onclick = () => { const T = tripState(); Object.assign(r, {from: {...T.from}, to: {...T.to}, bike: T.bike, foldable: T.foldable}); saveRoutine(); S.check = null; toast("Routine saved", `${T.from.name} → ${T.to.name}`, "✓"); render(); };
   const run = $("#mcRun"); if (run) run.onclick = () => morningCheck(false);
-  const use = $("#mcUse"); if (use) use.onclick = () => {
+  const use = $("#mcUse"); if (use) use.onclick = async () => {
     const T = tripState(), p = S.check.pick;
-    Object.assign(T, {from: {...r.from}, to: {...r.to}, bike: r.bike, foldable: r.foldable, when: "leave", time: hm(p.m)});
-    planTrip();
+    Object.assign(T, {from: {...r.from}, to: {...r.to}, bike: r.bike, foldable: r.foldable, when: "leave", time: hm24(p.m)});
+    await planTrip();
+    /* The routes render further down the page than the button that asked for them, so on a
+       phone nothing appears to happen. Take the reader to the answer. */
+    const first = document.querySelector("[data-trip-opt]") || document.querySelector(".panel.cond");
+    if (first) first.scrollIntoView({behavior: "smooth", block: "start"});
   };
 }
 

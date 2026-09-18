@@ -92,7 +92,8 @@ One IIFE in `index.html`. Key parts, in order:
 
 Done: phone layout, OSM map, door-to-door planning with time ranges, live disruptions with
 bridging-bus rerouting, crowding, rain, bus arrivals, bike parking, Arjun's routine and
-morning check, privacy panel, test-data replays, planned works (the "known in advance" half:
+morning check, live weather on screen (two-hour nowcast for both ends of the trip),
+privacy panel, test-data replays, planned works (the "known in advance" half:
 `/api/planned`, shown against the route and labelled "On your route" or "Named nearby"),
 offline support (`frontend/sw.js`: shell cache-first, `/api/*` network-first with the fetch
 time stamped so the UI can say "showing conditions saved at HH:MM"; the pmtiles map is
