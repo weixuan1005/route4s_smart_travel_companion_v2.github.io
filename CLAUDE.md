@@ -115,6 +115,13 @@ One IIFE in `index.html`. Key parts, in order:
   `withinHours()` handles windows ending after midnight, including DataMall's 24:xx times.
   Never fill trainhours.json from a GTFS feed without checking its provenance: the public
   Singapore ones document their MRT schedules as synthetic.
+- `planTrip()` wraps `computeOptions()` in try/catch: anything thrown used to leave the
+  screen on "Finding routes..." for ever, because `T.loading` was only cleared on the happy
+  path. A visible error the user can retry beats a spinner that never resolves.
+- `railKm()` measures rail only. A bus leg's `segments[].stations` are bus stop names, not
+  entries in `STATIONS`, so `st()` read `[0]` off undefined and threw the whole plan away.
+  It now skips bus lines and any name that is not a station, and `journeyKm()` does not ask
+  it about a bus option at all. Same guard inside `railBoardings()`.
 - Fares: `fareFor(km)` is the only place a price is decided, and it takes the whole
   journey's ridden distance (`journeyKm()`), because Singapore charges one distance fare per
   journey with transfers included - it used to be `1.09 + stops*0.1` in four places. Real

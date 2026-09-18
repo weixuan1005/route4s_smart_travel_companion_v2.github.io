@@ -1585,7 +1585,10 @@ function railBoardings(op){
   op.r.segments.forEach(sg => {
     if (!LINES[sg.line] || LINES[sg.line].bus) return;
     out.push({line: sg.line, t});
-    t += sg.stations.slice(1).reduce((m, n, j) => m + (dist(st(sg.stations[j]), st(n))/35)*(LINES[sg.line].lrt ? 2.4 : 1.35) + .6, 0) + 4;
+    t += (sg.stations || []).slice(1).reduce((m, n, j) => {
+      if (!STATIONS[sg.stations[j]] || !STATIONS[n]) return m;
+      return m + (dist(st(sg.stations[j]), st(n))/35)*(LINES[sg.line].lrt ? 2.4 : 1.35) + .6;
+    }, 0) + 4;
   });
   return out;
 }
@@ -1618,14 +1621,22 @@ async function loadFares(){
 /* Charged distance: the ridden legs only. Walking and cycling cost nothing. */
 function railKm(r){
   let km = 0;
-  (r && r.segments || []).forEach(sg => {
-    for (let i = 1; i < sg.stations.length; i++) km += dist(st(sg.stations[i-1]), st(sg.stations[i])) / 35;
+  ((r && r.segments) || []).forEach(sg => {
+    const L = LINES[sg.line];
+    if (L && L.bus) return;                        /* buses carry their own km */
+    const names = sg.stations || [];
+    for (let i = 1; i < names.length; i++){
+      if (!STATIONS[names[i-1]] || !STATIONS[names[i]]) continue;   /* not a rail station */
+      km += dist(st(names[i-1]), st(names[i])) / 35;
+    }
   });
   return km;
 }
 function journeyKm(op){
   if (op.kind === "walk" || op.kind === "cycle") return 0;
-  let km = op.r ? railKm(op.r) : railKm(op.leg);
+  let km = 0;
+  if (op.r) km += railKm(op.r);
+  else if (op.kind !== "bus") km += railKm(op.leg);   /* a bus option has no rail to measure */
   if (op.busOpt && op.busOpt.legs) km += op.busOpt.legs.reduce((t, l) => t + (l.km || 0), 0);
   return km;
 }
@@ -3415,7 +3426,16 @@ async function planTrip(){
   const T = tripState();
   T.loading = true; T.results = null; T.sel = 0; T.stale = false; render();
   const stamp = ++T.stamp;
-  const options = await computeOptions({from: T.from, to: T.to, bike: T.bike, foldable: T.foldable, when: T.when, time: T.time});
+  let options;
+  try {
+    options = await computeOptions({from: T.from, to: T.to, bike: T.bike, foldable: T.foldable, when: T.when, time: T.time});
+  } catch (e) {
+    console.error("Planning failed", e);
+    if (stamp !== T.stamp) return;
+    T.results = []; T.loading = false; T.planNote = "error"; T.planAt = null;
+    render();
+    return;
+  }
   if (stamp !== T.stamp) return;   /* a newer search started */
   T.results = options; T.loading = false; T.sel = 0; T.conditionsMode = dataMode(); T.planNote = PLAN_NOTE; T.planAt = PLAN_AT;
   render();
@@ -3520,6 +3540,9 @@ function viewTrip(){
   const whenChip = (k, l) => `<button class="chip" data-when="${k}" aria-pressed="${T.when === k}">${l}</button>`;
   let results = "";
   if (T.loading) results = `<div class="panel"><div class="meta">Finding routes…</div></div>`;
+  else if (T.results && !T.results.length && T.planNote === "error")
+    results = `<div class="panel" data-trip-msg><b>Something went wrong planning that trip.</b>
+      <div class="meta">The details are in the browser console. Try a different start or destination, or search again.</div></div>`;
   else if (T.results && !T.results.length && T.planNote === "connection")
     results = `<div class="panel" data-trip-msg><b>You could start, but not finish.</b>
       <div class="meta">Leaving at ${hm(T.planAt)} this journey needs a train that has already gone for the night. Trains run ${esc(railHoursNote())}.</div></div>`;
