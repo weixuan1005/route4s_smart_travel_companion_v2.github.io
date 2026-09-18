@@ -55,11 +55,11 @@ tools/                get_map.py, get_osm.py, fetch_bus_data.py, get_covered.py,
 
 ```bash
 pip install -r backend/requirements.txt
-python -m pytest -q                                   # 23 tests, all should pass
+python3 -m pytest -q                                   # 23 tests, all should pass
 uvicorn backend.main:app --host 0.0.0.0 --port 8000   # app at http://localhost:8000
-python tools/check_live.py                            # are the live feeds working?
-python tools/get_map.py                               # offline OSM map (once)
-python tools/fetch_bus_data.py --no-key --out frontend/busdata.json
+python3 tools/check_live.py                            # are the live feeds working?
+python3 tools/get_map.py                               # offline OSM map (once)
+python3 tools/fetch_bus_data.py --no-key --out frontend/busdata.json
 docker compose up -d                                  # OSRM walking + cycling (optional)
 ```
 

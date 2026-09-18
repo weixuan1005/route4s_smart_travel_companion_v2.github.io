@@ -161,7 +161,7 @@ paste your key straight after the `=`, with no spaces. Save (**Cmd + S**) and cl
 Check LTA accepts it:
 
 ```bash
-python tools/check_live.py
+python3 tools/check_live.py
 ```
 
 Every line should say `OK`. A brand-new key is sometimes refused for a while — if you get
@@ -187,15 +187,15 @@ screen is what you actually have.
 They are snapshots, so run these only when you want fresher data:
 
 ```bash
-python tools/get_map.py
+python3 tools/get_map.py
 ```
 
 ```bash
-python tools/fetch_bus_data.py --no-key --out frontend/busdata.json
+python3 tools/fetch_bus_data.py --no-key --out frontend/busdata.json
 ```
 
 ```bash
-python tools/get_covered.py
+python3 tools/get_covered.py
 ```
 
 ### Street-level walking and cycling routes (needs Docker)
@@ -221,7 +221,7 @@ brew install osmium-tool
 ```
 
 ```bash
-python tools/get_osm.py --clip
+python3 tools/get_osm.py --clip
 ```
 
 Downloads the OpenStreetMap data. `--clip` (which needs `osmium-tool` above) trims it to
@@ -252,6 +252,7 @@ Turn the routing servers off again with `docker compose down`.
 | What you see | What to do |
 |---|---|
 | `command not found: python3` | Install Python — Step 1 |
+| `command not found: python` | macOS has no `python`, only `python3`. Use `python3`. If a tool then says a package is missing, your virtualenv is not active: run `source .venv/bin/activate` first |
 | `TypeError: unsupported operand type(s) for \|` | Your Python is 3.9 — redo Step 1, then Step 3 |
 | `command not found: uvicorn` | The `(.venv)` is missing — run `source .venv/bin/activate` |
 | `Address already in use` | It is already running in another window. Use that one, or `lsof -ti:8000 \| xargs kill` |
@@ -260,7 +261,7 @@ Turn the routing servers off again with `docker compose down`.
 | Settings says "No backend found" | You opened the file directly instead of `http://localhost:8000` |
 | `zsh: command not found: docker` | Docker is not installed yet — `brew install --cask docker`, then open Docker Desktop from Applications |
 | `Cannot connect to the Docker daemon` | Docker Desktop is installed but not open — launch it from Applications and wait for it to say the engine is running |
-| `PBF error: unexpected EOF` from osmium | The extract download was cut short. `rm -rf osrm` and run `python tools/get_osm.py --clip` again |
+| `PBF error: unexpected EOF` from osmium | The extract download was cut short. `rm -rf osrm` and run `python3 tools/get_osm.py --clip` again |
 | `unknown shorthand flag: 'd' in -d` | The hyphen was turned into a dash on its way into Terminal. Type `docker compose up -d` by hand, or run `docker compose up` without the flag |
 | `no matching manifest for linux/arm64` | The OSRM image is Intel-only. In Docker Desktop, Settings → General, tick **Use Rosetta for x86/amd64 emulation**, then try again |
 
@@ -305,7 +306,7 @@ the limits we know about.
 
 ```bash
 pip install pytest
-python -m pytest -q          # line-code mapping, TrainServiceAlerts parser, API endpoints
+python3 -m pytest -q          # line-code mapping, TrainServiceAlerts parser, API endpoints
 ```
 
 | Endpoint | What it returns |
@@ -516,7 +517,7 @@ tools/fetch_bus_data.py  bus stops and routes (LTA DataMall key, or --no-key)
 Check every source in one go (after putting the key in `.env`):
 
 ```bash
-python tools/check_live.py
+python3 tools/check_live.py
 ```
 
 **Settings → Live data** shows what is connected. Without a DataMall key the app uses the
