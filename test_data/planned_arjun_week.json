@@ -1,0 +1,54 @@
+{
+  "_note": "Test data for demonstration. Same shape as the DataMall responses, not a real LTA response.",
+  "RoadWorks": {
+    "value": [
+      {
+        "EventID": "RW-PUNGGOL-01",
+        "RoadName": "Punggol Way",
+        "Other": "Resurfacing works, one lane closed towards Punggol Road",
+        "StartDate": "18/09/2026",
+        "EndDate": "28/09/2026"
+      },
+      {
+        "EventID": "RW-OLD-99",
+        "RoadName": "Ayer Rajah Expressway",
+        "Other": "Completed works",
+        "StartDate": "19/08/2026",
+        "EndDate": "21/08/2026"
+      }
+    ]
+  },
+  "RoadOpenings": {
+    "value": [
+      {
+        "EventID": "RO-ONENORTH-04",
+        "RoadName": "Ayer Rajah Avenue",
+        "Other": "Trench works for utility laying",
+        "StartDate": "21/09/2026",
+        "EndDate": "05/10/2026"
+      }
+    ]
+  },
+  "PlannedBusRoutes": {
+    "value": [
+      {
+        "ServiceNo": "119",
+        "Direction": 1,
+        "EffectiveDate": "2026-09-21",
+        "Description": "Route amended to serve Punggol Central before Punggol Temporary Interchange"
+      }
+    ]
+  },
+  "v2/FacilitiesMaintenance": {
+    "value": [
+      {
+        "StationCode": "NE17",
+        "StationName": "Punggol",
+        "Line": "NEL",
+        "Remarks": "Lift B (to Exit C) under maintenance",
+        "StartDate": "2026-09-18",
+        "EndDate": "2026-09-20"
+      }
+    ]
+  }
+}

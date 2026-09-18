@@ -59,7 +59,7 @@ def health():
     }
 
 
-from . import alerts, datamall, geo, linecodes, live  # noqa: E402  (after load_dotenv)
+from . import alerts, datamall, geo, linecodes, live, planned  # noqa: E402  (after load_dotenv)
 
 CROWD = {"l": "low", "m": "moderate", "h": "high"}
 
@@ -181,6 +181,27 @@ async def weather(lat: float = Query(..., ge=1.1, le=1.5), lon: float = Query(..
     return await _live(live.weather(lat, lon, replay), "Weather")
 
 
+@app.get("/api/planned")
+async def planned_events(replay: str | None = Query(None, description="test_data/planned_*.json"),
+                         within_days: int = Query(7, ge=1, le=60, description="how far ahead 'soon' looks")):
+    """Planned works, road openings, bus route changes and lift maintenance - the half of the
+    brief that is known in advance. Returns what is running today and what starts soon."""
+    if replay:
+        try:
+            records = planned.load_replay(replay)
+        except FileNotFoundError:
+            raise HTTPException(404, f"No planned replay called {replay!r}. See /api/status.")
+        return {**planned.summary(records, within_days=within_days), "source": f"replay:{replay}",
+                "test_data": True, "unavailable": {}}
+    try:
+        records, unavailable = await planned.fetch()
+    except datamall.NoKey as e:
+        return {"day": "", "today": [], "soon": [], "total": 0, "source": "unavailable",
+                "test_data": False, "unavailable": {}, "error": str(e)}
+    return {**planned.summary(records, within_days=within_days), "source": "live",
+            "test_data": False, "unavailable": unavailable}
+
+
 @app.get("/api/status")
 def status():
     return {
@@ -189,7 +210,8 @@ def status():
         "weather_key": bool(os.getenv("DATAGOV_API_KEY")),  # only raises the rate limit
         "osrm": bool(os.getenv("OSRM_FOOT_URL") and os.getenv("OSRM_BIKE_URL")),
         "replays": {"alerts": alerts.replay_names(), "crowd": live.replays("pcd_"), "weather": live.replays("weather_"),
-                    "bike_parking": live.replays("bikeparking_"), "bus_arrival": live.replays("busarrival_")},
+                    "bike_parking": live.replays("bikeparking_"), "bus_arrival": live.replays("busarrival_"),
+                    "planned": planned.replay_names()},
     }
 
 

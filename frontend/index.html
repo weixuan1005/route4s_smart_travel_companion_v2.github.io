@@ -3194,6 +3194,7 @@ function viewTrip(){
     <button class="primary" id="tripGo" style="margin-top:10px">Find routes</button>
   </div>
   ${routinePanel()}
+  ${plannedPanel(T.results)}
   ${results}`;
 }
 
@@ -3266,8 +3267,10 @@ function drawOsmTrip(){
 
 /* ---------- Added (Phase 3): live conditions from the backend (or labelled test data) ---------- */
 const APP2CANON = {NSL:"NSL", EWL:"EWL", CGL:"EWL", NEL:"NEL", CCL:"CCL", DTL:"DTL", TEL:"TEL", BPL:"BPLRT", SKE:"SKLRT", SKW:"SKLRT", PGE:"PGLRT", PGW:"PGLRT"};
-const REPLAYS = {crowd: "pcd_arjun_morning", weather: "weather_punggol_showers", parking: "bikeparking_sumang"};
-const LIVE = {status: null, checked: false, crowd: {}, weather: {}, parking: {}, alertsAt: null, alertsError: null};
+const REPLAYS = {crowd: "pcd_arjun_morning", weather: "weather_punggol_showers", parking: "bikeparking_sumang",
+                 planned: "planned_arjun_week"};
+const LIVE = {status: null, checked: false, crowd: {}, weather: {}, parking: {}, alertsAt: null, alertsError: null,
+              planned: null};
 const CROWD_UI = {
   low: {t: "Low", icon: "👤", cls: "cl-low"}, moderate: {t: "Moderate", icon: "👤👤", cls: "cl-mid"},
   high: {t: "High", icon: "👤👤👤", cls: "cl-high"}, "no data": {t: "No data", icon: "–", cls: "cl-na"}
@@ -3283,7 +3286,94 @@ async function liveInit(){
   if (LIVE.status && S.useTestData === null) S.useTestData = !LIVE.status.datamall;
   render();
   pollAlerts();
+  pollPlanned();
   setInterval(pollAlerts, 60000);
+  setInterval(pollPlanned, 30 * 60000);   /* published days ahead: no reason to ask often */
+}
+
+/* ---------- Planned events: RoadWorks, RoadOpenings, PlannedBusRoutes, FacilitiesMaintenance ----------
+   Scheduled works are known days in advance, so the app can say so before Arjun leaves rather than
+   after he is standing on a platform. Anything that cannot be tied to his route is shown apart from
+   what can, so "on your route" always means it. */
+async function pollPlanned(){
+  const mode = dataMode();
+  if (mode === "none") return;
+  const p = await api(mode === "test" ? `planned?replay=${REPLAYS.planned}` : "planned", 8000);
+  if (p && p.source !== "unavailable"){ LIVE.planned = p; render(); }
+}
+
+const PLANNED_UI = {
+  roadworks: {icon: "🚧", label: "Road works"},
+  road_opening: {icon: "🚧", label: "Road opening"},
+  bus_route_change: {icon: "🚌", label: "Bus route change"},
+  lift_maintenance: {icon: "🛗", label: "Lift maintenance"},
+};
+
+/* Stations, lines and bus services this journey actually uses. */
+function routeTouches(options){
+  const stations = new Set(), lines = new Set(), services = new Set();
+  (options || []).forEach(op => {
+    if (op.board) stations.add(op.board);
+    if (op.alight) stations.add(op.alight);
+    ((op.leg && op.leg.segments) || []).forEach(sg => {
+      lines.add(sg.line);
+      (sg.stations || []).forEach(n => stations.add(n));
+    });
+    ((op.busOpt && op.busOpt.legs) || []).forEach(l => services.add(String(l.svc)));
+  });
+  return {stations, lines, services};
+}
+
+/* How this event relates to the journey:
+     "route" - a bus service, line or station the journey actually uses
+     "near"  - only its name matches a place on the route, e.g. road works called "Punggol Way".
+               Worth showing, but not the same claim, so it is labelled differently.
+     null    - no connection we can demonstrate. */
+function routeRelation(rec, touch){
+  if (rec.kind === "bus_route_change") return touch.services.has(String(rec.title)) ? "route" : null;
+  if (rec.line && touch.lines.has(rec.line)) return "route";
+  if (rec.station || rec.kind === "lift_maintenance"){
+    const place = `${rec.where} ${rec.station}`.toLowerCase();
+    for (const n of touch.stations) if (n.length > 3 && place.includes(n.toLowerCase())) return "route";
+  }
+  const text = `${rec.title} ${rec.where} ${rec.station}`.toLowerCase();
+  for (const n of touch.stations) if (n.length > 3 && text.includes(n.toLowerCase())) return "near";
+  return null;
+}
+
+function plannedRow(rec, relation){
+  const ui = PLANNED_UI[rec.kind] || {icon: "📋", label: "Planned works"};
+  const tag = relation === "route" ? `<span class="tag why" style="margin:0">On your route</span>`
+                                   : `<span class="tag" style="margin:0">Named nearby</span>`;
+  const when = rec.starts && rec.ends ? `${rec.starts} to ${rec.ends}` : rec.starts ? `from ${rec.starts}` : "dates not given";
+  const what = rec.detail || rec.where || ui.label;
+  const head = rec.kind === "bus_route_change" ? `Bus ${rec.title}` : (rec.where || rec.title);
+  return `<div class="row" style="align-items:flex-start;padding:4px 0">
+    <div><b>${ui.icon} ${esc(head)}</b>
+      <div class="meta">${esc(what)}</div>
+      <div class="meta">${esc(when)}</div></div>${tag}</div>`;
+}
+
+/* The planned half of the brief, shown against this journey. */
+function plannedPanel(options){
+  const P = LIVE.planned;
+  if (!P) return "";
+  const touch = routeTouches(options);
+  const all = P.today.concat(P.soon);
+  if (!all.length) return "";
+  const mine = all.map(r => [r, routeRelation(r, touch)]).filter(([, rel]) => rel);
+  mine.sort((a, b) => (a[1] === "route" ? 0 : 1) - (b[1] === "route" ? 0 : 1));
+  const others = all.length - mine.length;
+  const soonIds = new Set(P.soon.map(r => r.title + r.starts));
+  return `
+  <div class="panel">
+    <div class="row"><b>Planned works</b>${sourceTag(P.test_data)}</div>
+    ${mine.length
+      ? mine.slice(0, 4).map(([r, rel]) => plannedRow(r, rel) + (soonIds.has(r.title + r.starts)
+          ? `<div class="meta" style="margin:-4px 0 6px">Starts later: worth knowing before it does.</div>` : "")).join("")
+      : `<div class="meta">Nothing planned on or near your route today or in the next week.</div>`}
+    ${others ? `<div class="meta" style="margin-top:6px">${others} more elsewhere in Singapore, with no connection to your route.</div>` : ""}
+  </div>`;
 }
 async function pollAlerts(){
   if (!LIVE.status) return;

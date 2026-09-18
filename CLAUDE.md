@@ -42,6 +42,7 @@ backend/main.py       FastAPI: serves the app and /api/*
 backend/linecodes.py  canonical line table: feeds disagree (STL vs SLRT, PTL vs PLRT, CEL/CGL)
 backend/alerts.py     TrainServiceAlerts -> normalised segments, free bus, bridging bus
 backend/live.py       bus arrivals, bike parking, weather
+backend/planned.py    RoadWorks, RoadOpenings, PlannedBusRoutes, FacilitiesMaintenance -> one shape
 backend/geo.py        OneMap search, OSRM walking/cycling legs (falls back to labelled estimates)
 backend/datamall.py   DataMall client, key from .env, in-memory cache
 test_data/            labelled replays in each feed's real shape
@@ -53,7 +54,7 @@ tools/                get_map.py, get_osm.py, fetch_bus_data.py, get_covered.py,
 
 ```bash
 pip install -r backend/requirements.txt
-python -m pytest -q                                   # 17 tests, all should pass
+python -m pytest -q                                   # 23 tests, all should pass
 uvicorn backend.main:app --host 0.0.0.0 --port 8000   # app at http://localhost:8000
 python tools/check_live.py                            # are the live feeds working?
 python tools/get_map.py                               # offline OSM map (once)
@@ -90,7 +91,9 @@ One IIFE in `index.html`. Key parts, in order:
 
 Done: phone layout, OSM map, door-to-door planning with time ranges, live disruptions with
 bridging-bus rerouting, crowding, rain, bus arrivals, bike parking, Arjun's routine and
-morning check, privacy panel, test-data replays, sheltered walkways (OpenStreetMap
+morning check, privacy panel, test-data replays, planned works (the "known in advance" half:
+`/api/planned`, shown against the route and labelled "On your route" or "Named nearby"),
+sheltered walkways (OpenStreetMap
 `covered=yes` paths via `tools/get_covered.py` -> `frontend/covered.json`, drawn on the map
 and measured per walking leg).
 
@@ -100,10 +103,9 @@ Next (was Phase 5 and 6):
 2. **Accessibility pass** — contrast, text size, screen-reader labels, sunlight readability.
 3. **Deliverables** — `WRITEUP.md` (persona, architecture, assumptions, limits, how numbers
    were measured), demo script, and a README check on a clean machine.
-4. **Optional** — planned works (`PlannedBusRoutes`, `RoadWorks`), and an LLM that turns
-   alert free-text into structured advice with cached results and a rule-based fallback.
-   LTA `CoveredLinkWay` would be the authoritative upgrade to the OpenStreetMap shelter data
-   below; it ships as a shapefile download, so it needs different tooling.
+4. **Optional** — an LLM that turns alert free-text into structured advice with cached results
+   and a rule-based fallback. LTA `CoveredLinkWay` would be the authoritative upgrade to the
+   OpenStreetMap shelter data; it ships as a shapefile download, so it needs different tooling.
 
 ## Unverified, needs a real run
 

@@ -123,6 +123,7 @@ python -m pytest -q          # line-code mapping, TrainServiceAlerts parser, API
 | `/api/alerts?replay=tsa_nel_punggol_serangoon` | The same shape from a **test data** replay, flagged `"test_data": true` |
 | `/api/replays` | Available test replays |
 | `/api/crowd?line=NEL&kind=realtime` | Station Crowd Density (`PCDRealTime`), or `kind=forecast` for `PCDForecast` |
+| `/api/planned` | Planned works: `RoadWorks`, `RoadOpenings`, `PlannedBusRoutes` and `v2/FacilitiesMaintenance`, split into what runs today and what starts soon |
 | `/api/geocode?q=fusionopolis` | Place search through OneMap |
 | `/api/route?mode=bike&from=lat,lon&to=lat,lon` | Street leg from OSRM on OpenStreetMap, or an estimate marked `"source": "estimate"` |
 
@@ -215,6 +216,7 @@ can still switch to test data there, for a repeatable demo.
 | `pcd_arjun_morning` | Busy platforms at Punggol and Serangoon 07:30–08:30 |
 | `weather_punggol_showers` | Showers over Punggol and Sengkang 07:30–09:30 |
 | `bikeparking_sumang` | 40 sheltered racks at Sumang LRT |
+| `planned_arjun_week` | A lift out at Punggol, works on Punggol Way, and a bus route change and road opening starting in three days |
 
 ## Using the app (Arjun's journey)
 
