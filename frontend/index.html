@@ -8,6 +8,11 @@
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet">
 <meta name="theme-color" content="#14213D">
+<!-- Inline so there is no extra request and no 404: the browser asks for a favicon on
+     every first load, and the app is also worth a real icon when added to a home screen. -->
+<link rel="icon" href="data:image/svg+xml,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20viewBox%3D%220%200%2064%2064%22%3E%3Crect%20width%3D%2264%22%20height%3D%2264%22%20rx%3D%2214%22%20fill%3D%22%2314213D%22%2F%3E%3Cpath%20d%3D%22M18%2046c0-8%209-8%209-14s-9-6-9-14%22%20fill%3D%22none%22%20stroke%3D%22%235B8DEF%22%20stroke-width%3D%226%22%20stroke-linecap%3D%22round%22%2F%3E%3Ccircle%20cx%3D%2218%22%20cy%3D%2218%22%20r%3D%226%22%20fill%3D%22%232E9E6A%22%2F%3E%3Ccircle%20cx%3D%2246%22%20cy%3D%2246%22%20r%3D%226%22%20fill%3D%22%23D14B4D%22%2F%3E%3C%2Fsvg%3E">
+<link rel="apple-touch-icon" href="data:image/svg+xml,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20viewBox%3D%220%200%2064%2064%22%3E%3Crect%20width%3D%2264%22%20height%3D%2264%22%20rx%3D%2214%22%20fill%3D%22%2314213D%22%2F%3E%3Cpath%20d%3D%22M18%2046c0-8%209-8%209-14s-9-6-9-14%22%20fill%3D%22none%22%20stroke%3D%22%235B8DEF%22%20stroke-width%3D%226%22%20stroke-linecap%3D%22round%22%2F%3E%3Ccircle%20cx%3D%2218%22%20cy%3D%2218%22%20r%3D%226%22%20fill%3D%22%232E9E6A%22%2F%3E%3Ccircle%20cx%3D%2246%22%20cy%3D%2246%22%20r%3D%226%22%20fill%3D%22%23D14B4D%22%2F%3E%3C%2Fsvg%3E">
+<meta name="apple-mobile-web-app-title" content="Route4Us">
 <link rel="stylesheet" href="vendor/leaflet/leaflet.css">
 <script src="vendor/leaflet/leaflet.js"></script>
 <script src="vendor/protomaps-leaflet/protomaps-leaflet.js"></script>
@@ -2881,7 +2886,7 @@ async function streetLeg(mode, a, b){
 
 function tripState(){
   if (!S.trip2) S.trip2 = {from: {...PERSONA.home}, to: {...PERSONA.work}, when: "now", time: hm(nowMin() + 15),
-    bike: true, foldable: false, results: null, loading: false, sel: 0, q: {from: "", to: ""}, stamp: 0};
+    bike: true, foldable: false, results: null, loading: false, sel: 0, q: {from: "", to: ""}, stamp: 0, mode: "all"};
   return S.trip2;
 }
 
@@ -3188,6 +3193,9 @@ function viewTrip(){
   else if (T.results){
     const osrm = T.results.some(o => o.sources.includes("osrm"));
     const cm = T.conditionsMode;
+    const shown = shownOptions(T);
+    /* Keep the selection inside what is on screen, so the map and the list agree. */
+    if (shown.length && !shown.some(([, i]) => i === T.sel)) T.sel = shown[0][1];
     results = `
       <div class="panel cond">
         <div class="row"><b>Today's conditions</b>${cm === "none" ? `<span class="tag rain" style="margin:0">Not checked</span>` : sourceTag(cm === "test")}</div>
@@ -3196,6 +3204,13 @@ function viewTrip(){
            T.results.some(o => o.wet) ? "Rain affects cycling" : "No rain on cycling legs",
            T.results.some(o => o.why.some(w => /Busy/.test(w))) ? "Some platforms busy" : "No busy platforms on these routes"].join(" · ")}</div>
         ${T.stale ? `<div class="meta" style="margin-top:4px;color:var(--stop)">Conditions changed since this search. <button class="ghost" id="tripRefresh" style="padding:2px 10px;min-height:0">Update</button></div>` : ""}
+      </div>
+      <div class="row" style="gap:6px;flex-wrap:wrap;margin:10px 2px 8px" role="group" aria-label="Way of travelling">
+        ${TRIP_MODES.map(([k, label]) => {
+          const n = k === "all" ? T.results.length : T.results.filter(op => modesOf(op).has(k)).length;
+          return `<button class="chip" data-trip-mode="${k}" aria-pressed="${T.mode === k}" ${n ? "" : "disabled"}
+            aria-label="${esc(label.replace(/^\S+\s/, ""))}, ${n} option${n === 1 ? "" : "s"}">${label} ${n}</button>`;
+        }).join("")}
       </div>`;
     results += `
       <div class="map-wrap osm-wrap ${S.mapExpanded ? "osm-expanded" : ""}" style="margin-top:4px">
@@ -3206,7 +3221,11 @@ function viewTrip(){
       <div class="meta" style="margin:-2px 2px 8px">${osrm
         ? "Cycling and walking legs follow OpenStreetMap streets."
         : "The cycling and walking legs are dashed because they are straight-line estimates: start the OSRM servers (README) for street-level routes."}</div>${tilesNote()}
-      <div class="triplist" role="list">${T.results.map((op, i) => `
+      ${!shown.length ? `<div class="panel"><b>No ${esc((TRIP_MODES.find(([k]) => k === T.mode) || [,""])[1].replace(/^\S+\s/, "").toLowerCase())} option for this trip.</b>
+        <div class="meta">${T.mode === "cycle" ? "Cycling is offered when the bike toggle is on and the distance is reasonable."
+          : T.mode === "walk" ? "Walking the whole way is only offered under about 1.8 km. Every other option still ends on foot."
+          : "Try another mode, or All."}</div></div>` : ""}
+      <div class="triplist" role="list">${shown.map(([op, i]) => `
         <button class="tripopt" role="listitem" data-trip-opt="${i}" aria-pressed="${i === T.sel}">
           <div class="row" style="align-items:flex-start"><div class="tstrip">${tripStrip(op)}</div>
             <div class="ttime"><b>${op.low}–${op.high}</b> min</div></div>
@@ -3277,6 +3296,9 @@ function bindTrip(){
   const fd = $("#tripFold"); if (fd) fd.onclick = () => { T.foldable = !T.foldable; T.results = null; render(); };
   const go = $("#tripGo"); if (go) go.onclick = planAndShow;
   document.querySelectorAll("[data-trip-opt]").forEach(b => b.onclick = () => { T.sel = +b.dataset.tripOpt; OSM && (OSM.fitKey = ""); render(); });
+  document.querySelectorAll("[data-trip-mode]").forEach(b => b.onclick = () => {
+    T.mode = b.dataset.tripMode; OSM && (OSM.fitKey = ""); render();
+  });
   const stt = $("#tripStart"); if (stt) stt.onclick = () => startPlannedTrip(T.results[T.sel]);
 }
 
@@ -3292,9 +3314,40 @@ function startPlannedTrip(op){
 }
 
 /* OSM view of the trip options: the chosen one in full colour, the others faint for comparison */
+/* Which ways of travelling an option really involves. A train option that starts with a
+   cycle to the station counts as both: filtering it out of "Cycle" would hide the journey
+   Arjun actually makes. */
+function modesOf(op){
+  const m = new Set();
+  if (op.kind === "rail" || op.kind === "bridge") m.add("train");
+  if (op.kind === "bus") m.add("bus");
+  if (op.kind === "cycle") m.add("cycle");
+  if (op.kind === "walk") m.add("walk");
+  const leg = op.leg || {};
+  /* Cycling counts wherever it happens, because cycling to the LRT is the journey Arjun
+     makes. Walking does not: nearly every journey ends on foot, so a filter that matched
+     any walking leg would match everything and tell you nothing. "Walk" means walk the
+     whole way. */
+  if (leg.accessMode === "bike" || leg.egressMode === "bike") m.add("cycle");
+  if ((leg.segments || []).some(sg => LINES[sg.line] && LINES[sg.line].bus)) m.add("bus");
+  return m;
+}
+
+const TRIP_MODES = [["all", "All"], ["train", "🚆 Train"], ["bus", "🚌 Bus"], ["cycle", "🚲 Cycle"], ["walk", "🚶 Walk only"]];
+
+/* Options matching the chosen mode, each keeping its index in T.results so selection,
+   the map and the option list cannot drift apart. */
+function shownOptions(T){
+  const all = (T.results || []).map((op, i) => [op, i]);
+  if (T.mode === "all") return all;
+  return all.filter(([op]) => modesOf(op).has(T.mode));
+}
+
 function drawOsmTrip(){
   const g = OSM.over; g.clearLayers(); OSM.me = null;
   const T = tripState(); if (!T.results || !T.results.length) return;
+  const shown = shownOptions(T), shownIdx = new Set(shown.map(([, i]) => i));
+  if (!shown.length) return;
   osmDisruptions(g);
   const lineOf = (op, dim) => {
     const leg = op.leg, P = leg.points, out = [];
@@ -3319,11 +3372,12 @@ function drawOsmTrip(){
     });
     return out;
   };
-  T.results.forEach((op, i) => { if (i !== T.sel) lineOf(op, true); });
-  const pts = lineOf(T.results[T.sel], false);
+  shown.forEach(([op, i]) => { if (i !== T.sel) lineOf(op, true); });
+  const sel = shownIdx.has(T.sel) ? T.sel : shown[0][1];
+  const pts = lineOf(T.results[sel], false);
   L.marker(llOf(T.from), {icon: pinIcon("A", "osm-pin-a"), title: T.from.name}).addTo(g);
   L.marker(llOf(T.to), {icon: pinIcon("B", "osm-pin-b"), title: T.to.name}).addTo(g);
-  osmFit(`trip:${T.stamp}:${T.sel}`, pts.concat([llOf(T.from), llOf(T.to)]));
+  osmFit(`trip:${T.stamp}:${T.mode}:${sel}`, pts.concat([llOf(T.from), llOf(T.to)]));
 }
 
 

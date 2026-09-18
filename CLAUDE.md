@@ -83,8 +83,11 @@ One IIFE in `index.html`. Key parts, in order:
 - OSM map — one Leaflet instance reused across tabs; `mountOsm()` re-parents it after each
   render because the app re-renders by replacing `#app.innerHTML`.
 - Trip planner — `computeOptions()` builds candidates, applies live conditions and ranks
-  for Arjun; `planTrip()` is the UI wrapper; `morningCheck()` tries departures every
-  10 minutes across his window.
+  for Arjun; `planTrip()` is the UI wrapper and `planAndShow()` scrolls to the map after it;
+  `morningCheck()` tries departures every 10 minutes across his window. `modesOf()` /
+  `shownOptions()` back the All / Train / Bus / Cycle / Walk-only chips: cycling counts
+  wherever it appears (cycling to the LRT is the journey), walking only when it is the
+  whole trip, or the filter would match everything.
 - `S` is the single state object; `render()` redraws the active tab; `tick()` runs the
   simulated trip every 120 ms.
 
