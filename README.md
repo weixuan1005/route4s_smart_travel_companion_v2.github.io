@@ -99,6 +99,7 @@ the `route4us` folder. The Python ones need `(.venv)` showing in your prompt fir
 | `python3 tools/get_map.py` | Refreshes the OpenStreetMap basemap |
 | `python3 tools/fetch_bus_data.py --no-key --out frontend/busdata.json` | Refreshes bus stops and routes |
 | `python3 tools/get_covered.py` | Refreshes the sheltered walkway data |
+| `python3 tools/check_fares.py` | Checks `frontend/fares.json` for transcription errors |
 
 Deploying to Google Cloud has [its own section](#put-it-on-google-cloud-https-for-phones-and-judges).
 
@@ -651,7 +652,18 @@ with an empty `bands` list:
 }
 ```
 
-Fill in `bands` from the published table and reload — no other change needed. **Settings →
+Fill in `bands` from the published table, then check your typing:
+
+```bash
+python3 tools/check_fares.py
+```
+
+It refuses a table that cannot be right — a fare that falls as distance grows, two bands
+ending at the same distance — warns about a misplaced decimal point or a leftover `0.00`, and
+prints the fare curve so you can hold it next to the published one. A wrong fare shown with a
+confident face is worse than the estimate it replaced.
+
+Then reload — no other change needed. **Settings →
 Fares** then shows the source and its effective date instead of *Estimate*, and the **Fare
 estimated** tag disappears from the trip options.
 

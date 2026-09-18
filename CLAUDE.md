@@ -48,7 +48,8 @@ backend/geo.py        OneMap search, OSRM walking/cycling legs (falls back to la
 backend/datamall.py   DataMall client, key from .env, in-memory cache
 test_data/            labelled replays in each feed's real shape
 tests/                pytest; upstream APIs replaced by fakes
-tools/                get_map.py, get_osm.py, fetch_bus_data.py, get_covered.py, check_live.py
+tools/                get_map.py, get_osm.py, fetch_bus_data.py, get_covered.py, check_live.py,
+                      check_fares.py
 ```
 
 ## Commands
