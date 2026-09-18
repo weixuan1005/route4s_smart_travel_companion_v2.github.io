@@ -260,6 +260,9 @@ The home and work locations are a demo profile for the persona: public places, n
 person's address. Nothing about trips is sent anywhere except the start and end points
 needed for place search and street routing on your own backend.
 
+`WRITEUP.md` covers the persona, the architecture, where each number below came from, and
+the limits we know about.
+
 ## Timing assumptions (trip planner)
 
 | Part | Estimate | Range shown |

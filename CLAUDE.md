@@ -100,10 +100,11 @@ deliberately not cached), sheltered walkways (OpenStreetMap
 `covered=yes` paths via `tools/get_covered.py` -> `frontend/covered.json`, drawn on the map
 and measured per walking leg).
 
-Next (was Phase 5 and 6):
+Next:
 1. **Accessibility pass** — contrast, text size, screen-reader labels, sunlight readability.
-3. **Deliverables** — `WRITEUP.md` (persona, architecture, assumptions, limits, how numbers
-   were measured), demo script, and a README check on a clean machine.
+   Nothing claims to serve the accessibility persona until this is done.
+2. **Deliverables** — `WRITEUP.md` is written (persona, architecture, assumptions and how each
+   number was derived, limits). A demo script and a README check on a clean machine are not.
 3. **Optional** — an LLM that turns alert free-text into structured advice with cached results
    and a rule-based fallback. LTA `CoveredLinkWay` would be the authoritative upgrade to the
    OpenStreetMap shelter data; it ships as a shapefile download, so it needs different tooling.
