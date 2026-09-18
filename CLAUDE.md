@@ -117,7 +117,11 @@ Next:
 
 - Real DataMall responses: the crowd **forecast** shape and the `FreeMRTShuttle` route text
   are my best understanding, not copied from LTA samples. `tools/check_live.py` prints both.
-- OSRM Docker build, Geofabrik download, Cloud Run deploy: never run in the build sandbox.
+- Cloud Run deploy: never run in the build sandbox.
+- OSRM and the Geofabrik download are no longer unverified: both were run on a real Mac, and
+  the foot profile answered `/route/v1/foot/...` with `"code":"Ok"` and a real geometry. Two
+  bugs in `tools/get_osm.py` were found doing it (a truncated download reported as success,
+  and that broken file then being reused on every retry); both are fixed.
 - Whether GitHub Pages serves the byte-range requests the `.pmtiles` map needs. The backend
   does (uvicorn answers 206), and the map renders locally from the committed 12.5 MB file
   (zoom 0-14); the Pages side is still unconfirmed.
