@@ -1877,7 +1877,7 @@ function viewJourney(){
     <button class="map-chip osm-expand" id="osmExpand" aria-label="${S.mapExpanded ? "Close full-screen map" : "Show map full screen"}">${S.mapExpanded ? "✕ Close" : "⤢ Full screen"}</button>
     ${mapModeToggle()}
   </div>
-  ${osmLegend([["route","Train route"],["closed","No service"],["a","From"],["b","To"]])}${tilesNote()}
+  ${osmLegend([["route","Train route"],["closed","No service"],["a","From"],["b","To"]].concat(COVERED ? [["covered","Sheltered walkway"]] : []))}${tilesNote()}
   <p class="meta" style="margin:6px 0 10px">Tap two stations on the map, or pick them below. Pinch to zoom. ${esc(stationCounts().mrt + " MRT and " + stationCounts().lrt + " LRT stations")}.</p>` : ""}
   <div class="map-wrap jmap" ${S.mapMode === "osm" ? "hidden" : ""}>
     <div class="offline-banner">Offline. Times use the saved timetable.</div>
