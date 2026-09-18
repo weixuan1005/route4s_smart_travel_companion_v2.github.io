@@ -2996,7 +2996,7 @@ async function computeOptions(p, opt){
     const m = s0.duration_s/60, sp = spread(mode);
     const leg = {mode: "walk", mins: Math.round(m), cost: 0, segments: [], accessMode: mode,
       points: [{x: O.x, y: O.y, label: O.short, role: "origin", departSeg: -1}, {x: D.x, y: D.y, label: D.short, role: "dest", arriveSeg: -1}],
-      geo: {access: s0.geometry}};
+      geo: {access: s0.geometry, accessSource: s0.source}};
     options.push({kind: mode === "bike" ? "cycle" : "walk", mode, low: m*(1-sp), high: m*(1+sp), transfers: 0, acc: s0, leg, sources: [s0.source], why: []});
   }
 
@@ -3068,8 +3068,11 @@ async function computeOptions(p, opt){
    the routes appear roughly 1500px below the fold and the tap looks like it did nothing. */
 async function planAndShow(){
   await planTrip();
-  const first = document.querySelector("[data-trip-opt]") || document.querySelector(".panel.cond");
-  if (first) first.scrollIntoView({behavior: "smooth", block: "start"});
+  /* Land on the map, not past it. The results are conditions, then the map, then the option
+     list, so scrolling to the first option hides the very thing that shows the route. */
+  const target = document.querySelector(".panel.cond") || document.querySelector("[data-osm-slot]")
+              || document.querySelector("[data-trip-opt]");
+  if (target) target.scrollIntoView({behavior: "smooth", block: "start"});
 }
 
 async function planTrip(){
@@ -3093,7 +3096,8 @@ function tripRailLeg(O, D, r, c, acc, egr){
   const segments = r.segments.map(sg => ({...sg, stops: sg.stations.length - 1}));
   const mins = Math.round(acc.duration_s/60 + c.extra + c.ride + r.change + 3 + egr.duration_s/60);
   return {mode: "mrt", mins, cost: +(1.09 + r.stops*0.1).toFixed(2), segments, points, board: c.o.n, alight: c.d.n, stops: r.stops,
-    accessMode: c.mode, egressMode: c.egress, foldable: !!tripState().foldable, geo: {access: acc.geometry, egress: egr.geometry}};
+    accessMode: c.mode, egressMode: c.egress, foldable: !!tripState().foldable,
+    geo: {access: acc.geometry, egress: egr.geometry, accessSource: acc.source, egressSource: egr.source}};
 }
 
 /* Place search: saved places, stations and known places instantly; OneMap through the backend */
@@ -3198,7 +3202,10 @@ function viewTrip(){
         <div data-osm-slot="trip" class="osm-slot"></div>
         <button class="map-chip osm-expand" id="osmExpand" aria-label="${S.mapExpanded ? "Close full-screen map" : "Show map full screen"}">${S.mapExpanded ? "✕ Close" : "⤢ Full screen"}</button>
       </div>
-      ${osmLegend([["route","Selected route"],["bike","Cycle"],["walk","Walk"],["other","Other options"],["a","From"],["b","To"]].concat(COVERED ? [["covered","Sheltered walkway"]] : []))}${tilesNote()}
+      ${osmLegend([["route","Selected route"],["bike","Cycle"],["walk","Walk"],["other","Other options"],["a","From"],["b","To"]].concat(COVERED ? [["covered","Sheltered walkway"]] : []))}
+      <div class="meta" style="margin:-2px 2px 8px">${osrm
+        ? "Cycling and walking legs follow OpenStreetMap streets."
+        : "The cycling and walking legs are dashed because they are straight-line estimates: start the OSRM servers (README) for street-level routes."}</div>${tilesNote()}
       <div class="triplist" role="list">${T.results.map((op, i) => `
         <button class="tripopt" role="listitem" data-trip-opt="${i}" aria-pressed="${i === T.sel}">
           <div class="row" style="align-items:flex-start"><div class="tstrip">${tripStrip(op)}</div>
@@ -3292,11 +3299,22 @@ function drawOsmTrip(){
   const lineOf = (op, dim) => {
     const leg = op.leg, P = leg.points, out = [];
     P.slice(0, -1).forEach((a, i) => {
-      const b = P[i+1], walk = a.departSeg < 0;
-      const geo = i === 0 && leg.geo && leg.geo.access ? leg.geo.access : (i === P.length - 2 && leg.geo && leg.geo.egress ? leg.geo.egress : [toLL(a.x, a.y), toLL(b.x, b.y)]);
-      const bike = walk && ((i === 0 && leg.accessMode === "bike") || (i === P.length - 2 && leg.egressMode === "bike"));
+      const b = P[i+1], walk = a.departSeg < 0, first = i === 0, last = i === P.length - 2;
+      const geo = first && leg.geo && leg.geo.access ? leg.geo.access : (last && leg.geo && leg.geo.egress ? leg.geo.egress : [toLL(a.x, a.y), toLL(b.x, b.y)]);
+      const bike = walk && ((first && leg.accessMode === "bike") || (last && leg.egressMode === "bike"));
+      /* A straight line between two points is an estimate, not a route. Draw it dashed so the
+         map cannot imply street-level routing the app does not have. */
+      const src = first ? (leg.geo || {}).accessSource : last ? (leg.geo || {}).egressSource : null;
+      const estimated = walk && src !== "osrm";
       const color = dim ? "#94a3b8" : walk ? (bike ? BIKE_COLOR : WALK_COLOR) : edgeColor(leg, i);
-      L.polyline(geo, {color, weight: dim ? 4 : (walk ? 5 : 7), opacity: dim ? .7 : 1, dashArray: dim ? "6 6" : (walk && !bike ? "2 9" : null), lineCap: "round", interactive: false}).addTo(g);
+      const line = L.polyline(geo, {color, weight: dim ? 4 : (bike ? 6 : walk ? 5 : 7), opacity: dim ? .7 : 1,
+        dashArray: dim ? "6 6" : (bike ? (estimated ? "10 6" : null) : walk ? "2 9" : null),
+        lineCap: "round", interactive: !dim}).addTo(g);
+      if (!dim && bike){
+        const mins = first ? op.accMin : op.egrMin;
+        line.bindTooltip(`🚲 Cycle${mins ? ` ${Math.round(mins)} min` : ""}${estimated ? " · straight-line estimate" : " · OpenStreetMap streets"}`,
+                         {sticky: true, className: "osm-tag"});
+      }
       out.push(...geo);
     });
     return out;
