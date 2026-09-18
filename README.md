@@ -203,11 +203,17 @@ python tools/get_covered.py
 Without this, walking and cycling legs are straight lines between two points, drawn dashed
 and labelled **Street legs estimated**. With it, they follow real streets and cycle paths.
 
-Install Docker Desktop, then **open it from Applications** — the app has to be running, not
-just installed:
+Install Docker Desktop:
 
 ```bash
 brew install --cask docker
+```
+
+Then **open Docker Desktop from Applications** and wait until it says the engine is running.
+Installing it is not enough — nothing below works until that app is open. Check with:
+
+```bash
+docker --version
 ```
 
 ```bash
@@ -250,7 +256,9 @@ Turn the routing servers off again with `docker compose down`.
 | `externally-managed-environment` | You skipped the virtual environment — redo Step 3 |
 | Browser says "can't connect" | The Terminal window running the app was closed or stopped — redo Step 4 |
 | Settings says "No backend found" | You opened the file directly instead of `http://localhost:8000` |
-| `Cannot connect to the Docker daemon` | Docker Desktop is installed but not open — launch it from Applications |
+| `zsh: command not found: docker` | Docker is not installed yet — `brew install --cask docker`, then open Docker Desktop from Applications |
+| `Cannot connect to the Docker daemon` | Docker Desktop is installed but not open — launch it from Applications and wait for it to say the engine is running |
+| `no matching manifest for linux/arm64` | The OSRM image is Intel-only. In Docker Desktop, Settings → General, tick **Use Rosetta for x86/amd64 emulation**, then try again |
 
 ---
 
