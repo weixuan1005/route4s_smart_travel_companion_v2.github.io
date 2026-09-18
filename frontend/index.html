@@ -339,6 +339,9 @@ input[type=range]{width:100%;accent-color:var(--route)}
 .osm-pin{display:grid;place-items:center;width:26px;height:26px;border-radius:50%;background:#64748b;color:#fff;font:800 12px/1 var(--font);border:2px solid #fff;box-shadow:0 1px 4px rgba(0,0,0,.35)}
 .osm-pin-next,.osm-pin-b{background:#D14B4B}
 .osm-pin-a{background:#2E9E6A}
+.osm-stn{display:inline-block;white-space:nowrap;pointer-events:none;font:600 11px/1.2 var(--font);color:var(--ink);text-shadow:0 0 3px var(--map-bg),0 0 3px var(--map-bg),0 0 3px var(--map-bg),0 1px 0 var(--map-bg)}
+.osm-stn-int{font-weight:800;font-size:12px}
+.osm-stn-l{transform:translateX(calc(-100% - 14px))}
 .leaflet-tooltip.osm-tag{font:700 12px/1.2 var(--font);padding:3px 7px;border-radius:8px;border:1px solid #cbd5e1}
 .leaflet-tooltip.osm-tag-bad{background:#111827;color:#fff;border-color:#111827}
 .leaflet-container .leaflet-control-attribution{font-size:11px}
@@ -2490,7 +2493,9 @@ function osmInit(){
   L.control.zoom({position:"bottomright"}).addTo(map);
   map.attributionControl.setPrefix(false);
   map.attributionControl.addAttribution(OSM_ATTRIB);
-  OSM = {map, el, base:null, tiles:"checking", net:L.layerGroup().addTo(map), over:L.layerGroup().addTo(map), me:null, fitKey:"", view:""};
+  OSM = {map, el, base:null, tiles:"checking", net:L.layerGroup().addTo(map), over:L.layerGroup().addTo(map),
+         stnLabels:L.layerGroup().addTo(map), me:null, fitKey:"", view:""};
+  map.on("moveend zoomend", drawStationLabels);
   drawNetwork();
   checkTiles();
   return OSM;
@@ -2531,6 +2536,55 @@ function drawNetwork(){
     m.bindTooltip(n, {direction:"top", offset:[0,-4]});
     m.on("click", () => { if (OSM.view === "journey") pickStation(n); });
     m.addTo(OSM.net);
+  }
+  drawStationLabels();
+}
+
+/* Station names on the OSM map. All 146 at once is unreadable on a phone, so they come in
+   with zoom - interchanges first, then every station - and only for what is in view.
+   The dots keep their own tap/hover tooltip, so a name is still reachable when zoomed out. */
+const STN_ZOOM_ALL = 13, STN_ZOOM_INTERCHANGE = 11;
+const stnLabelIcon = (txt, big, left) => L.divIcon({className:"",
+  html:`<span class="osm-stn${big ? " osm-stn-int" : ""}${left ? " osm-stn-l" : ""}">${esc(txt)}</span>`,
+  iconSize:[0, 0], iconAnchor:[-7, 7]});
+function drawStationLabels(){
+  if (!OSM || !OSM.stnLabels) return;
+  OSM.stnLabels.clearLayers();
+  const z = OSM.map.getZoom();
+  if (z < STN_ZOOM_INTERCHANGE) return;
+  const everyStation = z >= STN_ZOOM_ALL, inView = OSM.map.getBounds(), want = [];
+  for (const n in STATIONS){
+    const lines = linesAt(n);
+    if (!lines.length) continue;
+    const interchange = lines.length > 1;
+    if (!everyStation && !interchange) continue;
+    const ll = toLL(...STATIONS[n]);
+    if (!inView.contains(ll)) continue;
+    want.push({n, ll, interchange, lines: lines.length});
+  }
+  /* The city centre packs interchanges tightly, so names would sit on top of each other.
+     Busiest interchanges claim their space first and any name that would overlap one already
+     placed is left out; its dot still carries the name on tap. Zooming in frees the space. */
+  want.sort((a, b) => b.lines - a.lines || a.n.localeCompare(b.n));
+  const taken = [], size = OSM.map.getSize();
+  /* The map's own buttons (zoom, Full screen, Line diagram, attribution) sit on top of it,
+     so claim their boxes first and no name is drawn underneath one. */
+  const mr = OSM.el.getBoundingClientRect(), wrap = OSM.el.closest(".map-wrap") || OSM.el.parentElement;
+  if (wrap) wrap.querySelectorAll(".leaflet-control, .map-chip").forEach(el => {
+    const r = el.getBoundingClientRect();
+    if (r.width) taken.push([r.left - mr.left - 4, r.top - mr.top - 4, r.right - mr.left + 4, r.bottom - mr.top + 4]);
+  });
+  for (const c of want){
+    const pt = OSM.map.latLngToContainerPoint(c.ll);
+    const w = c.n.length * (c.interchange ? 6.8 : 6.1) + 8, h = 15;
+    /* A name that would run past the right edge is drawn to the left of its dot instead,
+       so it reads in full rather than being cut off by the edge of the map. */
+    const left = pt.x + 7 + w > size.x - 4;
+    const x0 = left ? pt.x - 7 - w : pt.x + 7;
+    const box = [x0, pt.y - 7, x0 + w, pt.y - 7 + h];
+    if (taken.some(t => box[0] < t[2] && t[0] < box[2] && box[1] < t[3] && t[1] < box[3])) continue;
+    taken.push(box);
+    L.marker(c.ll, {icon: stnLabelIcon(c.n, c.interchange, left), interactive:false, keyboard:false}).addTo(OSM.stnLabels);
   }
 }
 function osmDisruptions(group){
