@@ -20,6 +20,9 @@ import urllib.request
 from pathlib import Path
 
 URL = "https://download.geofabrik.de/asia/malaysia-singapore-brunei-latest.osm.pbf"
+# Identify the tool. Left to itself urllib sends "Python-urllib/x.y", which distribution
+# servers routinely refuse with 403 - the same failure get_map.py hit against Protomaps.
+UA = {"User-Agent": "smart-commuter-companion/1.0 (LTA hackathon entry)"}
 BBOX = "103.59,1.16,104.09,1.48"
 ROOT = Path(__file__).resolve().parent.parent
 OSRM = ROOT / "osrm"
@@ -27,7 +30,7 @@ OSRM = ROOT / "osrm"
 
 def download(dest):
     print(f"Downloading {URL}")
-    with urllib.request.urlopen(URL, timeout=120) as r, open(dest, "wb") as f:
+    with urllib.request.urlopen(urllib.request.Request(URL, headers=UA), timeout=120) as r, open(dest, "wb") as f:
         total = int(r.headers.get("Content-Length", 0))
         done = 0
         while chunk := r.read(1 << 20):
