@@ -1,0 +1,31 @@
+# What NOT to upload when running `gcloud run deploy --source .`
+#
+# Without this file gcloud builds its own list from .gitignore. That happens to be close to
+# right, but it is implicit, and the one file that must never leave this machine is the one
+# holding the keys - so it is named here explicitly rather than left to a default.
+#
+# frontend/map/singapore.pmtiles is deliberately NOT excluded: it is the OpenStreetMap base
+# map and the app has no map without it in the container.
+
+# secrets - never upload
+.env
+
+# version control and local tooling
+.git
+.github
+.gitignore
+.pytest_cache/
+
+# python local state
+__pycache__/
+**/__pycache__/
+*.pyc
+.venv/
+venv/
+
+# large local-only data, rebuilt by tools/ when needed
+osrm/
+tools/bin/
+
+# not used at runtime
+tests/

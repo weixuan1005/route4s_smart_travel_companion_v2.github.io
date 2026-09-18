@@ -119,7 +119,10 @@ Next:
 
 - Real DataMall responses: the crowd **forecast** shape and the `FreeMRTShuttle` route text
   are my best understanding, not copied from LTA samples. `tools/check_live.py` prints both.
-- Cloud Run deploy: never run in the build sandbox.
+- Cloud Run deploy: never run in the build sandbox, and still not run anywhere. The README
+  now has the full path (Secret Manager for the keys, `--set-secrets` at deploy time) and
+  `.gcloudignore` controls the upload, but no one has watched `gcloud run deploy` finish.
+  The Dockerfile has not been built either - there is no Docker daemon in the sandbox.
 - OSRM and the Geofabrik download are no longer unverified: both were run on a real Mac, and
   the foot profile answered `/route/v1/foot/...` with `"code":"Ok"` and a real geometry. Two
   bugs in `tools/get_osm.py` were found doing it (a truncated download reported as success,

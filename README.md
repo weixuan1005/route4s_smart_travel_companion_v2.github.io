@@ -335,19 +335,146 @@ the page already holds and the rest of the journey stays readable.
 Service workers need HTTPS or localhost. On a plain-http address the app still runs, without
 the offline cache.
 
-## Put the backend online (HTTPS, for phones and judges)
+## Put it on Google Cloud (HTTPS, for phones and judges)
 
-The `Dockerfile` runs the backend and the app together. On Google Cloud Run:
+This puts the whole thing — the app, the backend and the map — on one address like
+`https://smart-commuter-xxxx.asia-southeast1.run.app`, which works on any phone with no
+laptop involved. The keys go into Google's Secret Manager, never into the code.
+
+Cloud Run charges per request and scales to zero, so an app nobody is using costs nothing.
+You still need billing switched on, which means a card on file.
+
+**Copy each block into Terminal and press Enter. Wait for one to finish before the next.**
+
+### 1. Install the Google Cloud command
 
 ```bash
-gcloud run deploy smart-commuter --source . --region asia-southeast1 --allow-unauthenticated \
-  --set-env-vars LTA_ACCOUNT_KEY=YOUR_KEY
+brew install --cask google-cloud-sdk
 ```
 
-Cloud Run prints an `https://…run.app` address; open it on a phone. For a team project, store
-the key in Secret Manager and use `--set-secrets LTA_ACCOUNT_KEY=lta-key:latest` instead.
-OSRM is not part of this container; without it, walking and cycling legs are estimates
-(labelled). Run the OSRM containers on a VM and set `OSRM_FOOT_URL` / `OSRM_BIKE_URL` if needed.
+No Homebrew? Download the installer from https://cloud.google.com/sdk/docs/install-sdk
+instead. Then close Terminal, open it again, and check it worked:
+
+```bash
+gcloud --version
+```
+
+### 2. Sign in
+
+```bash
+gcloud auth login
+```
+
+A browser window opens. Pick your Google account and allow access.
+
+### 3. Make a project
+
+The name has to be unique across all of Google, so put something of your own on the end.
+
+```bash
+gcloud projects create route4us-2026 --name="Route4Us"
+gcloud config set project route4us-2026
+```
+
+If it says the ID is taken, change `route4us-2026` to something else and run both lines again.
+
+### 4. Turn on billing
+
+Open https://console.cloud.google.com/billing, pick your project, and link a billing account.
+Cloud Run will refuse to deploy without this. New accounts get free credit, and the free tier
+covers far more traffic than a demo.
+
+### 5. Turn on the services this uses
+
+```bash
+gcloud services enable run.googleapis.com cloudbuild.googleapis.com \
+  artifactregistry.googleapis.com secretmanager.googleapis.com
+```
+
+This one takes a minute or two.
+
+### 6. Put your keys in Secret Manager
+
+Replace `PASTE_YOUR_LTA_KEY` with the AccountKey from DataMall. The quotes matter.
+
+```bash
+printf '%s' 'PASTE_YOUR_LTA_KEY' | gcloud secrets create lta-key --data-file=-
+```
+
+If you also have a data.gov.sg key (optional — it only raises the rate limit):
+
+```bash
+printf '%s' 'PASTE_YOUR_DATAGOV_KEY' | gcloud secrets create datagov-key --data-file=-
+```
+
+The key is now stored by Google, encrypted. It is not in the repo, not in the container image
+and not in the deploy command's history.
+
+### 7. Let the app read those secrets
+
+Cloud Run runs as a service account, and that account needs permission.
+
+```bash
+PROJECT_NUMBER=$(gcloud projects describe $(gcloud config get-value project) \
+  --format='value(projectNumber)')
+
+gcloud secrets add-iam-policy-binding lta-key \
+  --member="serviceAccount:${PROJECT_NUMBER}-compute@developer.gserviceaccount.com" \
+  --role="roles/secretmanager.secretAccessor"
+```
+
+Run the same block again for `datagov-key` if you made one.
+
+### 8. Deploy
+
+From the project folder (the one with `Dockerfile` in it):
+
+```bash
+gcloud run deploy smart-commuter \
+  --source . \
+  --region asia-southeast1 \
+  --allow-unauthenticated \
+  --set-secrets LTA_ACCOUNT_KEY=lta-key:latest
+```
+
+Add `,DATAGOV_API_KEY=datagov-key:latest` on the end of that last line if you made the second
+secret — one `--set-secrets`, comma-separated, no spaces.
+
+The first deploy takes about five minutes: it uploads the folder, builds the container and
+starts it. It may ask to create an Artifact Registry repository — say yes. When it finishes it
+prints a `https://…run.app` address. That is your app. Open it on your phone.
+
+`asia-southeast1` is Singapore. Keep it — the whole app is about Singapore transport, and the
+DataMall calls are made from there.
+
+### Check it came up right
+
+```bash
+curl https://YOUR-ADDRESS.run.app/api/health
+```
+
+`datamall_key_set` should be `true`. If it is `false`, the secret did not reach the container:
+re-check step 7, then deploy again.
+
+### Things worth knowing
+
+**Do not set `OSRM_FOOT_URL` or `OSRM_BIKE_URL` on Cloud Run.** The values in `.env.example`
+point at `localhost`, which on Cloud Run is the container itself — there is no OSRM there. The
+app would report street routing as available while every lookup failed. Left unset, walking
+and cycling legs fall back to estimates and are labelled as estimates, which is honest. To use
+real OSRM, run those containers on a VM and point these at that VM's address.
+
+**Deploying again** is the same step 8 command. `:latest` means a rotated key is picked up by
+the next deploy without editing anything.
+
+**Turning it off**, so it cannot cost anything:
+
+```bash
+gcloud run services delete smart-commuter --region asia-southeast1
+```
+
+**What gets uploaded** is controlled by `.gcloudignore`, and `.env` is the first line in it.
+Your keys never leave your machine.
 
 ## Project layout
 
@@ -452,3 +579,9 @@ rank first. These are stated assumptions, not measured values.
 
 The LTA DataMall AccountKey goes in `.env` only. `.gitignore` excludes `.env`, and
 `/api/health` reports only whether a key is set, never the key itself.
+
+Deployed to Google Cloud the key lives in Secret Manager and is handed to the container as an
+environment variable at start-up (`--set-secrets`, see "Put it on Google Cloud"). It is not in
+the repo, not in the container image, and not in the deploy command. `.gcloudignore` excludes
+`.env` from the upload and `.dockerignore` excludes it from the image, so neither a build log
+nor a pulled image can leak it.
