@@ -36,6 +36,7 @@ Mandatory capabilities from the brief, each capped at 3/5 if missing:
 
 ```
 frontend/index.html   the whole app: one file, plain JS, no build step (~4k lines)
+frontend/sw.js        service worker: app shell offline, API answers stamped with their age
 frontend/vendor/      Leaflet + protomaps-leaflet, kept local so the app works offline
 frontend/map/         singapore.pmtiles (OpenStreetMap via Protomaps), made by tools/get_map.py
 backend/main.py       FastAPI: serves the app and /api/*
@@ -93,17 +94,17 @@ Done: phone layout, OSM map, door-to-door planning with time ranges, live disrup
 bridging-bus rerouting, crowding, rain, bus arrivals, bike parking, Arjun's routine and
 morning check, privacy panel, test-data replays, planned works (the "known in advance" half:
 `/api/planned`, shown against the route and labelled "On your route" or "Named nearby"),
-sheltered walkways (OpenStreetMap
+offline support (`frontend/sw.js`: shell cache-first, `/api/*` network-first with the fetch
+time stamped so the UI can say "showing conditions saved at HH:MM"; the pmtiles map is
+deliberately not cached), sheltered walkways (OpenStreetMap
 `covered=yes` paths via `tools/get_covered.py` -> `frontend/covered.json`, drawn on the map
 and measured per walking leg).
 
 Next (was Phase 5 and 6):
-1. **Offline and underground** — service worker for the app shell, map and current journey;
-   "Last updated HH:MM · no signal".
-2. **Accessibility pass** — contrast, text size, screen-reader labels, sunlight readability.
+1. **Accessibility pass** — contrast, text size, screen-reader labels, sunlight readability.
 3. **Deliverables** — `WRITEUP.md` (persona, architecture, assumptions, limits, how numbers
    were measured), demo script, and a README check on a clean machine.
-4. **Optional** — an LLM that turns alert free-text into structured advice with cached results
+3. **Optional** — an LLM that turns alert free-text into structured advice with cached results
    and a rule-based fallback. LTA `CoveredLinkWay` would be the authoritative upgrade to the
    OpenStreetMap shelter data; it ships as a shapefile download, so it needs different tooling.
 

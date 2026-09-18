@@ -119,6 +119,7 @@ input[type=range]{width:100%;accent-color:var(--route)}
 /* Map + nav */
 .map-wrap{position:relative;border-radius:20px;overflow:hidden;border:1px solid var(--line);margin-bottom:12px}
 .map-wrap svg{display:block;width:100%;height:auto;background:var(--map-bg)}
+.stale-note{background:var(--warn-soft);border-radius:10px;padding:6px 10px;margin:8px 0;font-weight:600}
 .offline-banner{display:none;position:absolute;left:10px;right:10px;top:10px;background:var(--warn-soft);color:var(--ink);border-radius:12px;padding:6px 10px;font-size:.75rem;font-weight:600}
 .offline .offline-banner{display:block}
 .nextleg{display:flex;gap:12px;align-items:center}
@@ -2829,11 +2830,34 @@ const hm = m => fmt(((Math.round(m) % 1440) + 1440) % 1440);
 const nowMin = () => { const d = new Date(); return d.getHours()*60 + d.getMinutes(); };
 const parseHM = t => { const m = /^(\d{1,2}):(\d{2})$/.exec(t || ""); return m ? +m[1]*60 + +m[2] : nowMin(); };
 
+/* Tracks whether the last answer came off the network or out of the service worker's cache,
+   so the app can say "last updated HH:MM" instead of presenting stale data as live. */
+const NET = {cachedAt: 0, offline: false};
 async function api(path, ms){
   const ctl = new AbortController(), timer = setTimeout(() => ctl.abort(), ms || 7000);
-  try { const r = await fetch("api/" + path, {signal: ctl.signal}); if (!r.ok) return null; return await r.json(); }
-  catch (e) { return null; }
+  try {
+    const r = await fetch("api/" + path, {signal: ctl.signal});
+    const stamp = +(r.headers.get("X-Cached-At") || 0);
+    if (r.status === 503 && stamp === 0){ NET.offline = true; return null; }   /* no signal, nothing cached */
+    if (!r.ok) return null;
+    NET.offline = !!stamp;                 /* a stamped answer is the cache answering for the network */
+    NET.cachedAt = stamp || Date.now();
+    return await r.json();
+  }
+  catch (e) { NET.offline = true; return null; }
   finally { clearTimeout(timer); }
+}
+
+/* "Last updated HH:MM - no signal", which the brief asks the app to decide and show.
+   Two different situations, and saying nothing in the second would be the dishonest one:
+   there is saved data and it has an age, or there is none and live conditions are simply
+   not being checked. */
+function staleNote(){
+  if (!NET.offline) return "";
+  if (!NET.cachedAt)
+    return `<div class="meta stale-note">No signal, and nothing saved yet. Live conditions are not being checked; the journey below is the last one planned.</div>`;
+  const t = new Date(NET.cachedAt).toTimeString().slice(0, 5);
+  return `<div class="meta stale-note">No signal. Showing conditions saved at ${t}.</div>`;
 }
 /* Street leg from the backend (OSRM on OpenStreetMap). Static hosting or no backend: labelled estimate. */
 const legCache = new Map();
@@ -3194,6 +3218,7 @@ function viewTrip(){
     <button class="primary" id="tripGo" style="margin-top:10px">Find routes</button>
   </div>
   ${routinePanel()}
+  ${staleNote()}
   ${plannedPanel(T.results)}
   ${results}`;
 }
@@ -3652,7 +3677,8 @@ function liveSettingsPanels(){
       ${row("Weather (data.gov.sg)", true, st.weather_key ? "Key set · higher limit" : "No key needed")}
       ${row("Street routing (OSRM)", st.osrm, st.osrm ? "Configured" : "Estimates")}
       <div class="toggle"><div><b>Use test data</b><div class="meta">${st.datamall ? "Replay recorded scenarios instead of live feeds" : "On because no DataMall key is set"}</div></div><button class="switch" role="switch" id="useTest" aria-checked="${mode === "test"}" aria-label="Use test data" ${st.datamall ? "" : "disabled"}></button></div>
-      <div class="meta">Now using: <b>${mode === "live" ? "live LTA feeds" : "test data (labelled in the app)"}</b>${LIVE.alertsAt ? ` · alerts checked ${new Date(LIVE.alertsAt).toTimeString().slice(0, 5)}` : ""}${LIVE.alertsError ? ` · ${esc(LIVE.alertsError)}` : ""}</div>`}
+      <div class="meta">Now using: <b>${mode === "live" ? "live LTA feeds" : "test data (labelled in the app)"}</b>${LIVE.alertsAt ? ` · alerts checked ${new Date(LIVE.alertsAt).toTimeString().slice(0, 5)}` : ""}${LIVE.alertsError ? ` · ${esc(LIVE.alertsError)}` : ""}</div>
+      ${staleNote()}`}
   </div>
   <div class="panel">
     <h3>Your data</h3>
@@ -3797,6 +3823,15 @@ render();
 loadBusData();
 loadCovered();
 mapFile();
+
+/* Cache the shell so the app opens underground. Registration is best effort: on a plain-http
+   host, or a browser without service workers, the app simply works as before. */
+if ("serviceWorker" in navigator){
+  addEventListener("load", () => navigator.serviceWorker.register("sw.js")
+    .catch(e => console.warn("Service worker not registered:", e.message)));
+}
+addEventListener("online", () => { NET.offline = false; pollAlerts(); pollPlanned(); render(); });
+addEventListener("offline", () => { NET.offline = true; render(); });
 liveInit();
 setInterval(checkSchedule, 60000);
 })();

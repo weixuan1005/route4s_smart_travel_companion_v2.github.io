@@ -129,6 +129,21 @@ python -m pytest -q          # line-code mapping, TrainServiceAlerts parser, API
 
 Without a key, live endpoints answer `"source": "unavailable"` rather than inventing data.
 
+### Underground, with no signal
+
+`frontend/sw.js` caches the app shell, the vendored map libraries and the bus and shelter
+data, so the app opens between stations. Live endpoints are network-first with a six second
+timeout and fall back to the last good answer, which carries the time it was fetched: the app
+says **"No signal. Showing conditions saved at HH:MM"** rather than presenting stale data as
+live, and says so differently when it has nothing saved at all.
+
+`singapore.pmtiles` is deliberately **not** cached. It is tens of megabytes and is read with
+byte-range requests, which the Cache API cannot serve usefully; the map keeps whatever tiles
+the page already holds and the rest of the journey stays readable.
+
+Service workers need HTTPS or localhost. On a plain-http address the app still runs, without
+the offline cache.
+
 ### Open it on your phone
 
 - **Same Wi-Fi, quick check:** find your computer's address on the network and open it on
