@@ -85,6 +85,7 @@ Restart the server after the first two so it serves the new files.
 ```bash
 python tools/get_map.py                                             # offline OpenStreetMap basemap -> frontend/map/singapore.pmtiles
 python tools/fetch_bus_data.py --no-key --out frontend/busdata.json  # real LTA bus stops and routes
+python tools/get_covered.py                                         # sheltered walkways from OpenStreetMap -> frontend/covered.json
 python tools/get_osm.py                                             # OSM extract for OSRM (add --clip if osmium is installed)
 docker compose up -d                                                # OSRM walking + cycling; the first start builds routing files and takes several minutes
 curl "http://localhost:5001/route/v1/foot/103.8965,1.4102;103.9024,1.4053"   # should answer "code":"Ok"
@@ -92,7 +93,10 @@ curl "http://localhost:5001/route/v1/foot/103.8965,1.4102;103.9024,1.4053"   # s
 
 Without the map file the map says so and draws lines and stations only. Without OSRM,
 walking and cycling legs are straight-line estimates and the app labels them
-**Street legs estimated**.
+**Street legs estimated**. Without `covered.json` the app never claims a walk is sheltered;
+with it, the covered network is drawn on the map and each walking leg says how much of it
+runs under shelter. Settings reports which of these are installed, so what you see is what
+is really there.
 
 One thing to watch: `/api/health` reports `osrm_foot_url_set: true`, and Settings shows
 street routing as "Configured", as soon as `.env` exists - `.env.example` already carries

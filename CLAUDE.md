@@ -46,7 +46,7 @@ backend/geo.py        OneMap search, OSRM walking/cycling legs (falls back to la
 backend/datamall.py   DataMall client, key from .env, in-memory cache
 test_data/            labelled replays in each feed's real shape
 tests/                pytest; upstream APIs replaced by fakes
-tools/                get_map.py, get_osm.py, fetch_bus_data.py, check_live.py
+tools/                get_map.py, get_osm.py, fetch_bus_data.py, get_covered.py, check_live.py
 ```
 
 ## Commands
@@ -90,7 +90,9 @@ One IIFE in `index.html`. Key parts, in order:
 
 Done: phone layout, OSM map, door-to-door planning with time ranges, live disruptions with
 bridging-bus rerouting, crowding, rain, bus arrivals, bike parking, Arjun's routine and
-morning check, privacy panel, test-data replays.
+morning check, privacy panel, test-data replays, sheltered walkways (OpenStreetMap
+`covered=yes` paths via `tools/get_covered.py` -> `frontend/covered.json`, drawn on the map
+and measured per walking leg).
 
 Next (was Phase 5 and 6):
 1. **Offline and underground** — service worker for the app shell, map and current journey;
@@ -98,9 +100,10 @@ Next (was Phase 5 and 6):
 2. **Accessibility pass** — contrast, text size, screen-reader labels, sunlight readability.
 3. **Deliverables** — `WRITEUP.md` (persona, architecture, assumptions, limits, how numbers
    were measured), demo script, and a README check on a clean machine.
-4. **Optional** — sheltered walkways (LTA CoveredLinkWay), planned works
-   (`PlannedBusRoutes`, `RoadWorks`), and an LLM that turns alert free-text into structured
-   advice with cached results and a rule-based fallback.
+4. **Optional** — planned works (`PlannedBusRoutes`, `RoadWorks`), and an LLM that turns
+   alert free-text into structured advice with cached results and a rule-based fallback.
+   LTA `CoveredLinkWay` would be the authoritative upgrade to the OpenStreetMap shelter data
+   below; it ships as a shapefile download, so it needs different tooling.
 
 ## Unverified, needs a real run
 

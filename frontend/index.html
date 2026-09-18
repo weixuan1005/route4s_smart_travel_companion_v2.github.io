@@ -366,6 +366,7 @@ input[type=range]{width:100%;accent-color:var(--route)}
 .tsteps{margin:4px 0 0;padding-left:20px;display:grid;gap:6px;font-size:.9rem}
 .lg-bike{border-top:5px solid #0E9F6E}
 .lg-other{border-top:4px dashed #94a3b8}
+.lg-covered{border-top:3px dotted #2BB3A3}
 .crowdlvl{display:flex;flex-direction:column;align-items:center;min-width:86px;padding:6px 10px;border-radius:12px;font-size:.8rem}
 .crowdlvl span{font-size:1rem;letter-spacing:-2px}
 .cl-low{background:var(--go-soft);color:var(--go)}.cl-mid{background:var(--warn-soft);color:#9A5B0F}.cl-high{background:var(--stop-soft);color:var(--stop)}.cl-na{background:var(--surface-2);color:var(--muted)}
@@ -759,7 +760,8 @@ const edgeColor = (leg, i) => leg.points[i].departSeg >= 0 ? LINES[leg.segments[
 function nav(leg, i, dest){
   const P = leg.points, cur = P[i], next = P[i+1];
   if (leg.mode === "walk" && leg.accessMode === "bike") return {key:"walk", kind:"bike", title:`Cycle to ${dest.short}`, detail:"Following the cycling route on the map", color:BIKE_COLOR};
-  if (leg.mode === "walk") return {key:"walk", kind:"walk", title:`Walk to ${dest.short}`, detail:"Sheltered walkway most of the way", color:WALK_COLOR};
+  if (leg.mode === "walk") return {key:"walk", kind:"walk", title:`Walk to ${dest.short}`,
+    detail: shelterNote(P.map(q => toLL(q.x, q.y))), color:WALK_COLOR};
   if (i === 0){
     const L = LINES[leg.segments[0].line];
     if (leg.accessMode === "bike") return {key:"toboard", kind:"bike", title:`Cycle to ${next.station}`, detail: leg.foldable ? "Fold your bike before you enter the station" : "Park your bike at the station", color:BIKE_COLOR, next:next.station};
@@ -1109,7 +1111,7 @@ function viewGo(){
          <button class="map-chip" id="toggleLabels" aria-pressed="${S.mapLabels}">Station names</button>`}
     ${mapModeToggle()}
   </div>
-  ${S.mapMode === "osm" ? osmLegend([["route","Your route"],["walk","Walk"],["closed","No service"],["alt","Alternative"],["you","You"]]) + tilesNote() : ""}
+  ${S.mapMode === "osm" ? osmLegend([["route","Your route"],["walk","Walk"],["closed","No service"],["alt","Alternative"],["you","You"]].concat(COVERED ? [["covered","Sheltered walkway"]] : [])) + tilesNote() : ""}
   ${alertBlock}
   <div class="panel">
     <div class="nextleg">
@@ -1144,7 +1146,7 @@ function viewSettings(){
   </div>
   <div class="panel">
     <h3>Offline maps</h3>
-    <div class="row"><div><b>Singapore Central + MRT network</b><div class="meta">52 MB · downloaded</div></div><span class="tag why">Ready</span></div>
+    ${mapFileRow()}
   </div>
   <div class="panel">
     <h3>Bus data</h3>
@@ -1160,6 +1162,14 @@ function viewSettings(){
       <label class="ghost" style="cursor:pointer">Load bus data file<input type="file" id="busFile" accept=".json,application/json" hidden></label>
       ${BUSDATA && BUSDATA.source !== "embedded" && BUSDATA.source !== "busdata.json" ? `<button class="ghost" id="busClear">Use simulated buses</button>` : ""}
     </div>
+  </div>
+  <div class="panel">
+    <h3>Sheltered walkways</h3>
+    ${COVERED
+      ? `<div class="row"><div><b>Covered paths from OpenStreetMap</b><div class="meta">${COVERED.ways.length.toLocaleString()} ways · ${esc(COVERED.generated)} · ${esc(COVERED.attribution)}</div></div><span class="tag why">Active</span></div>
+         <div class="meta" style="margin-top:6px">Drawn on the street map, and used to say how much of a walk is covered.</div>`
+      : `<div class="row"><div><b>Not installed</b><div class="meta">Run <code>python tools/get_covered.py</code> to add Singapore's covered walkways.</div></div><span class="tag rain">Missing</span></div>
+         <div class="meta" style="margin-top:6px">Until then the app never claims a walk is sheltered.</div>`}
   </div>
   <div class="panel">
     <h3>Connected devices</h3>
@@ -1405,6 +1415,87 @@ const busNote = () => BUSDATA
        ? "Arrival times and bus loads come from LTA's Bus Arrival API; fares are estimated."
        : "Arrival times, crowding and fares are simulated; live times need a DataMall key and the backend.")
   : "Bus services, stops and arrival times are simulated for this prototype. A real app would use LTA DataMall's live Bus Arrival data.";
+
+/* ---------- Sheltered walkways (OpenStreetMap covered=yes paths, from tools/get_covered.py) ----------
+   Arjun cares whether he stays dry, so the app draws the covered network and says how much of a
+   walk runs under it. With no covered.json it says nothing at all rather than guessing. */
+let COVERED = null;
+const COVER_M = 30;        /* a point this close to a covered way counts as sheltered */
+const COVER_CELL = 0.005;  /* ~550 m index cells, so a leg checks a handful of ways, not thousands */
+const coverKey = (lat, lon) => `${Math.round(lat / COVER_CELL)}:${Math.round(lon / COVER_CELL)}`;
+
+function initCovered(raw){
+  const ways = (raw.ways || []).filter(w => Array.isArray(w) && w.length > 1);
+  if (!ways.length) return;
+  const grid = new Map();
+  ways.forEach((w, wi) => w.forEach(([lat, lon]) => {
+    const k = coverKey(lat, lon);
+    if (!grid.has(k)) grid.set(k, new Set());
+    grid.get(k).add(wi);
+  }));
+  COVERED = {ways, grid, generated: raw.generated || "", source: raw.source || "OpenStreetMap",
+             attribution: raw.attribution || "© OpenStreetMap contributors"};
+}
+
+async function loadCovered(){
+  try {
+    const r = await fetch("covered.json", {cache:"no-cache"});
+    if (!r.ok) return;
+    initCovered(await r.json());
+    if (OSM) drawCovered();
+    render();
+  } catch (e) { /* no file: the app simply never claims shelter */ }
+}
+
+/* Metres from a point to a segment, flat-earth over a few hundred metres. */
+const M_DEG = 111320;
+function metresToSeg(lat, lon, a, b){
+  const kx = Math.cos(lat * Math.PI / 180) * M_DEG;
+  const px = lon * kx, py = lat * M_DEG;
+  const ax = a[1] * kx, ay = a[0] * M_DEG, bx = b[1] * kx, by = b[0] * M_DEG;
+  const dx = bx - ax, dy = by - ay, len = dx * dx + dy * dy;
+  const t = len ? Math.max(0, Math.min(1, ((px - ax) * dx + (py - ay) * dy) / len)) : 0;
+  return Math.hypot(px - (ax + t * dx), py - (ay + t * dy));
+}
+
+function shelteredAt(lat, lon){
+  if (!COVERED) return false;
+  for (let i = -1; i <= 1; i++) for (let j = -1; j <= 1; j++){
+    const set = COVERED.grid.get(coverKey(lat + i * COVER_CELL, lon + j * COVER_CELL));
+    if (!set) continue;
+    for (const wi of set){
+      const w = COVERED.ways[wi];
+      for (let k = 0; k < w.length - 1; k++) if (metresToSeg(lat, lon, w[k], w[k + 1]) <= COVER_M) return true;
+    }
+  }
+  return false;
+}
+
+/* Share of a [[lat,lon], ...] line that runs under shelter, sampled about every 25 m.
+   Returns null when there is no covered data, so callers can stay quiet instead of guessing. */
+function coveredShare(line){
+  if (!COVERED || !line || line.length < 2) return null;
+  let hits = 0, tries = 0;
+  for (let i = 0; i < line.length - 1; i++){
+    const [alat, alon] = line[i], [blat, blon] = line[i + 1];
+    const steps = Math.max(1, Math.round(kmBetween(alat, alon, blat, blon) * 1000 / 25));
+    for (let s = 0; s <= steps; s++){
+      const t = s / steps;
+      tries++;
+      if (shelteredAt(alat + (blat - alat) * t, alon + (blon - alon) * t)) hits++;
+    }
+  }
+  return tries ? hits / tries : null;
+}
+
+/* What to tell someone walking this leg. Only ever says "sheltered" from real covered data. */
+function shelterNote(line){
+  const share = coveredShare(line);
+  if (share === null) return "Follow the walking route on the map";
+  if (share >= 0.7) return `Sheltered most of the way (${Math.round(share * 100)}% covered, OpenStreetMap)`;
+  if (share >= 0.3) return `Partly sheltered (${Math.round(share * 100)}% covered, OpenStreetMap)`;
+  return "Little shelter on this stretch: bring an umbrella if it looks like rain";
+}
 
 /* ---------- Added: real bus routes without an LTA key (LTA data republished by BusRouter SG, cheeaun/sgbusdata) ---------- */
 const BUSROUTER_BASE = "https://raw.githubusercontent.com/cheeaun/sgbusdata/main/data/v1/";
@@ -2500,20 +2591,55 @@ function osmInit(){
   L.control.zoom({position:"bottomright"}).addTo(map);
   map.attributionControl.setPrefix(false);
   map.attributionControl.addAttribution(OSM_ATTRIB);
-  OSM = {map, el, base:null, tiles:"checking", net:L.layerGroup().addTo(map), over:L.layerGroup().addTo(map),
-         stnLabels:L.layerGroup().addTo(map), me:null, fitKey:"", view:""};
+  OSM = {map, el, base:null, tiles:"checking", covered:L.layerGroup().addTo(map), net:L.layerGroup().addTo(map),
+         over:L.layerGroup().addTo(map), stnLabels:L.layerGroup().addTo(map), me:null, fitKey:"", view:""};
   map.on("moveend zoomend", drawStationLabels);
   drawNetwork();
+  drawCovered();
   checkTiles();
   return OSM;
 }
+/* Is the offline OpenStreetMap file actually here? Asked once and reported as found, so nothing
+   claims a downloaded map that was never created. Content-Range gives its real size. */
+const MAPINFO = {state: "checking", bytes: 0};
+let mapFileHead = null;
+function mapFile(){
+  return mapFileHead || (mapFileHead = (async () => {
+    try {
+      const r = await fetch(MAP_FILE, {headers:{Range:"bytes=0-126"}, cache:"no-cache"});
+      if (!(r.status === 206 || r.status === 200)) throw new Error("HTTP " + r.status);
+      const total = /\/(\d+)\s*$/.exec(r.headers.get("Content-Range") || "");
+      const buf = new Uint8Array(await r.arrayBuffer());
+      MAPINFO.bytes = total ? +total[1] : buf.length;
+      MAPINFO.state = "ok";
+      return buf;
+    } catch (e) {
+      MAPINFO.state = "missing"; MAPINFO.error = e.message;
+      return null;
+    } finally {
+      if (S.tab === "settings") render();
+    }
+  })());
+}
+
+/* The offline map panel says what is really on disk, never a fixed size. */
+function mapFileRow(){
+  const name = "<b>Singapore OpenStreetMap basemap</b>";
+  if (MAPINFO.state === "ok"){
+    const mb = MAPINFO.bytes ? `${(MAPINFO.bytes / 1e6).toFixed(0)} MB · ` : "";
+    return `<div class="row"><div>${name}<div class="meta">${mb}served with this app</div></div><span class="tag why">Ready</span></div>`;
+  }
+  if (MAPINFO.state === "missing")
+    return `<div class="row"><div>${name}<div class="meta">Not installed, so the map shows lines and stations only. Run <code>python tools/get_map.py</code>.</div></div><span class="tag rain">Missing</span></div>`;
+  return `<div class="row"><div>${name}<div class="meta">Checking…</div></div><span class="tag">Checking</span></div>`;
+}
+
 async function checkTiles(){
   try {
-    const r = await fetch(MAP_FILE, {headers:{Range:"bytes=0-126"}, cache:"no-cache"});
-    if (!(r.status === 206 || r.status === 200)) throw new Error("HTTP " + r.status);
+    const head = await mapFile();
+    if (!head) throw new Error(MAPINFO.error || "map file not found");
     /* PMTiles v3 header: byte 101 is the highest zoom in the file. A smaller file (e.g. --maxzoom 13)
        is stretched beyond that zoom instead of showing blank tiles. */
-    const head = new Uint8Array(await r.arrayBuffer());
     const isPm = String.fromCharCode(...head.slice(0, 7)) === "PMTiles";
     const fileMaxZoom = isPm && head.length > 101 ? head[101] : 15;
     if (typeof protomapsL === "undefined") throw new Error("protomaps-leaflet missing");
@@ -2545,6 +2671,15 @@ function drawNetwork(){
     m.addTo(OSM.net);
   }
   drawStationLabels();
+}
+
+/* The covered walkway network, drawn under the rail lines so it never hides a route. */
+function drawCovered(){
+  if (!OSM || !OSM.covered) return;
+  OSM.covered.clearLayers();
+  if (!COVERED) return;
+  COVERED.ways.forEach(w => L.polyline(w, {color:"#2BB3A3", weight:2.5, opacity:.5, dashArray:"1 4",
+    lineCap:"round", interactive:false}).addTo(OSM.covered));
 }
 
 /* Station names on the OSM map. All 146 at once is unreadable on a phone, so they come in
@@ -3021,7 +3156,7 @@ function viewTrip(){
         <div data-osm-slot="trip" class="osm-slot"></div>
         <button class="map-chip osm-expand" id="osmExpand" aria-label="${S.mapExpanded ? "Close full-screen map" : "Show map full screen"}">${S.mapExpanded ? "✕ Close" : "⤢ Full screen"}</button>
       </div>
-      ${osmLegend([["route","Selected route"],["bike","Cycle"],["walk","Walk"],["other","Other options"],["a","From"],["b","To"]])}${tilesNote()}
+      ${osmLegend([["route","Selected route"],["bike","Cycle"],["walk","Walk"],["other","Other options"],["a","From"],["b","To"]].concat(COVERED ? [["covered","Sheltered walkway"]] : []))}${tilesNote()}
       <div class="triplist" role="list">${T.results.map((op, i) => `
         <button class="tripopt" role="listitem" data-trip-opt="${i}" aria-pressed="${i === T.sel}">
           <div class="row" style="align-items:flex-start"><div class="tstrip">${tripStrip(op)}</div>
@@ -3570,6 +3705,8 @@ $("#dReset").onclick = () => { clearInterval(timer); S = initial(); render(); };
 
 render();
 loadBusData();
+loadCovered();
+mapFile();
 liveInit();
 setInterval(checkSchedule, 60000);
 })();
