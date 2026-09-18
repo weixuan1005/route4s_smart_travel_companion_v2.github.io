@@ -1536,13 +1536,17 @@ function railWindow(line){
 }
 const hhmmMin = t => { const m = /^(\d{1,2}):(\d{2})$/.exec(String(t || "").trim()); return m ? +m[1]*60 + +m[2] : null; };
 const dayKey = () => ["sun","wd","wd","wd","wd","wd","sat"][new Date().getDay()];
+/* The clock the app is showing, wrapped to a time of day. */
+const appNowMin = () => ((Math.round(S.clockMin) % 1440) + 1440) % 1440;
 
 /* Inside [first, last]? A window ending after midnight - last before first, or a 24:xx time,
    both of which DataMall uses - runs into the next day, so the minute is tried a day on too. */
 function withinHours(minute, first, last){
   if (first === null || last === null) return null;
   const end = last < first ? last + 1440 : last;
-  return (minute >= first && minute <= end) || (minute + 1440 >= first && minute + 1440 <= end);
+  /* A leg late in a journey can carry a minute past 1440 - "01:10 tomorrow" - so try the
+     minute a day earlier as well as a day later. */
+  return [minute, minute + 1440, minute - 1440].some(m => m >= first && m <= end);
 }
 /* true, false, or null for "no timetable for this service". */
 const svcRunsAt = (h, minute) => {
@@ -1555,6 +1559,26 @@ const railRunsAt = (minute, line) => { const w = railWindow(line); return within
 const railLastTrainDoubt = minute =>
   !TRAINHOURS && withinHours(minute, RAIL_LAST_BAND[0], RAIL_LAST_BAND[1]) === true;
 const busHoursKnown = () => !!(BUSDATA && BUSDATA.routes.some(rt => rt.hours));
+
+/* Why the last plan came back empty, when the reason was service hours rather than geography.
+   "gone" means nothing was running at the departure time; "connection" means the journey
+   started fine and needed a train that had already gone. Different sentences to a commuter. */
+let PLAN_NOTE = null;
+let PLAN_AT = null;     /* the minute the last plan was built for */
+
+/* When each rail leg is boarded: access time, then each segment's ride plus a change. The
+   same walk the crowding check makes, so the two agree about when you are where. */
+function railBoardings(op){
+  if (!op || !op.r || !op.r.segments) return [];
+  const out = [];
+  let t = op.depart + (op.accMin || 0);
+  op.r.segments.forEach(sg => {
+    if (!LINES[sg.line] || LINES[sg.line].bus) return;
+    out.push({line: sg.line, t});
+    t += sg.stations.slice(1).reduce((m, n, j) => m + (dist(st(sg.stations[j]), st(n))/35)*(LINES[sg.line].lrt ? 2.4 : 1.35) + .6, 0) + 4;
+  });
+  return out;
+}
 
 /* ---------- Fares ----------
    Singapore charges by distance across a whole journey, not per stop and not per leg: a bus
@@ -3259,7 +3283,8 @@ async function computeOptions(p, opt){
     op.base = op.mid + 5*op.transfers + 0.5*(op.high - op.low) + (op.kind === "bus" ? 4 : 0);
     op.penalty = 0;
   });
-  const nowM = nowMin();
+  const nowM = appNowMin();
+  PLAN_AT = p.when === "now" ? nowM : parseHM(p.time);
   options.forEach(op => {
     op.depart = p.when === "arrive" ? parseHM(p.time) - op.high : (p.when === "leave" ? parseHM(p.time) : nowM);
   });
@@ -3294,21 +3319,36 @@ async function computeOptions(p, opt){
   }
   /* Anything that has stopped running for the night, on the day being planned for. Walking
      and cycling always run; unknown hours are left alone. */
+  PLAN_NOTE = null;
+  const hadOptions = options.length;
+  let droppedForHours = 0;
   for (let i = options.length - 1; i >= 0; i--){
     const op = options[i];
     if (op.kind === "walk" || op.kind === "cycle") continue;
-    const stopped = op.kind === "bus"
-      ? ((op.busOpt && op.busOpt.legs) || []).some(l => svcRunsAt(l.hours, op.depart) === false)
-      : railRunsAt(op.depart, op.r && op.r.segments && op.r.segments[0] && op.r.segments[0].line) === false;
-    if (stopped) options.splice(i, 1);
+    let stopped;
+    if (op.kind === "bus"){
+      stopped = ((op.busOpt && op.busOpt.legs) || []).some(l => svcRunsAt(l.hours, op.depart) === false);
+    } else {
+      /* Every leg has to be catchable, not just the first: a change at 00:40 is no good
+         because the first train left at 23:50. */
+      const board = railBoardings(op);
+      stopped = board.length
+        ? board.some(b => railRunsAt(b.t, b.line) === false)
+        : railRunsAt(op.depart) === false;
+    }
+    if (stopped){ options.splice(i, 1); droppedForHours++; }
+  }
+  if (hadOptions && !options.length && droppedForHours){
+    PLAN_NOTE = railRunsAt(PLAN_AT) === false ? "gone" : "connection";
   }
 
   /* Near the end of service we cannot say whether this line's last train has gone. */
-  if (options.length && railLastTrainDoubt(options[0].depart)){
-    options.forEach(op => {
-      if (op.kind === "rail" || op.kind === "bridge") op.lateTrain = true;
-    });
-  }
+  options.forEach(op => {
+    if (op.kind !== "rail" && op.kind !== "bridge") return;
+    const board = railBoardings(op);
+    const times = board.length ? board.map(b => b.t) : [op.depart];
+    if (times.some(t => railLastTrainDoubt(t))) op.lateTrain = true;
+  });
 
   /* One fare for the whole journey, on the total ridden distance - not a sum of per-leg
      prices, which is not how a through fare works. */
@@ -3351,7 +3391,7 @@ async function planTrip(){
   const stamp = ++T.stamp;
   const options = await computeOptions({from: T.from, to: T.to, bike: T.bike, foldable: T.foldable, when: T.when, time: T.time});
   if (stamp !== T.stamp) return;   /* a newer search started */
-  T.results = options; T.loading = false; T.sel = 0; T.conditionsMode = dataMode();
+  T.results = options; T.loading = false; T.sel = 0; T.conditionsMode = dataMode(); T.planNote = PLAN_NOTE; T.planAt = PLAN_AT;
   render();
 }
 
@@ -3454,8 +3494,11 @@ function viewTrip(){
   const whenChip = (k, l) => `<button class="chip" data-when="${k}" aria-pressed="${T.when === k}">${l}</button>`;
   let results = "";
   if (T.loading) results = `<div class="panel"><div class="meta">Finding routes…</div></div>`;
-  else if (T.results && !T.results.length && railRunsAt(T.when === "now" ? nowMin() : parseHM(T.time)) === false)
-    results = `<div class="panel"><b>Nothing is running at ${hm(T.when === "now" ? nowMin() : parseHM(T.time))}.</b>
+  else if (T.results && !T.results.length && T.planNote === "connection")
+    results = `<div class="panel"><b>You could start, but not finish.</b>
+      <div class="meta">Leaving at ${hm(T.planAt)} this journey needs a train that has already gone for the night. Trains run ${esc(railHoursNote())}.</div></div>`;
+  else if (T.results && !T.results.length && (T.planNote === "gone" || railRunsAt(T.planAt ?? (T.when === "now" ? appNowMin() : parseHM(T.time))) === false))
+    results = `<div class="panel"><b>Nothing is running at ${hm(T.planAt ?? (T.when === "now" ? appNowMin() : parseHM(T.time)))}.</b>
       <div class="meta">Trains run ${esc(railHoursNote())}${busHoursKnown() ? ", and no bus on this route is running either" : ""}. Try a time inside those hours.</div></div>`;
   else if (T.results && !T.results.length) results = samePlace(T.from, T.to)
     ? `<div class="panel"><b>You're already there.</b><div class="meta">${esc(T.from.name)} is both the start and the destination. Pick somewhere else to go.</div></div>`

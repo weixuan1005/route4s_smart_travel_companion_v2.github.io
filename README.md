@@ -662,6 +662,9 @@ train the other way. LTA publishes none of this through DataMall.
 So the app does two things rather than pretend to one:
 
 - **Outside 05:00–00:15** nothing runs anywhere, so no rail option is offered.
+- **Each leg is checked at its own boarding time**, not just the first. A journey that starts
+  before the last train but needs a connection after it is refused, with *"You could start,
+  but not finish"* rather than a bare "no route found".
 - **Between 23:15 and 00:15** the last train on this line, in this direction, may already have
   gone. The option is still shown, tagged **Check last train**, with a note pointing at the
   station poster and the operator apps. Hiding it would be a guess; promising it would be a

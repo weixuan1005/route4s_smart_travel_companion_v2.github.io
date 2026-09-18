@@ -104,7 +104,14 @@ One IIFE in `index.html`. Key parts, in order:
   window where `op.lateTrain` puts a **Check last train** tag on rail options instead of
   guessing. `frontend/trainhours.json` overrides both per line; it ships empty, and an empty
   `lines: {}` must not count as a table (`{}` is truthy - that bug hid the caution once).
-  `computeOptions()` drops what has stopped; unknown hours never hide anything.
+  `computeOptions()` drops what has stopped; unknown hours never hide anything. It asks
+  `appNowMin()` (the clock on screen, `S.clockMin`) rather than `nowMin()` (the device), or a
+  trip simulated into the small hours gets planned against the real afternoon. Every rail leg
+  is checked at its own boarding time via `railBoardings()`, not just the first: a change at
+  00:40 is no good if that line's last train went at 23:50. When that empties the list,
+  `PLAN_NOTE` says which of the two happened - "gone" (nothing ran at departure) or
+  "connection" (you could start but not finish) - and `PLAN_AT` records the minute planned
+  for, so the message does not drift as the clock moves.
   `withinHours()` handles windows ending after midnight, including DataMall's 24:xx times.
   Never fill trainhours.json from a GTFS feed without checking its provenance: the public
   Singapore ones document their MRT schedules as synthetic.
