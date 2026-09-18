@@ -1150,7 +1150,9 @@ function viewSettings(){
     <h3>Bus data</h3>
     ${BUSDATA
       ? `<div class="row"><div><b>Real LTA bus routes</b><div class="meta">${BUSDATA.stops.size.toLocaleString()} stops · ${BUSDATA.routes.length.toLocaleString()} service directions · ${esc(BUSDATA.generated)} · from ${esc(BUSDATA.source)}</div></div><span class="tag why">Active</span></div>
-         <div class="meta" style="margin-top:6px">Arrival times are still simulated.</div>`
+         <div class="meta" style="margin-top:6px">${dataMode() === "live"
+           ? "Arrival times come from LTA when you open a stop. The planner's next-bus estimate is still simulated."
+           : "Arrival times are simulated until a DataMall key is set and test data is off."}</div>`
       : `<div class="row"><div><b>Simulated buses</b><div class="meta">Add busdata.json from fetch_bus_data.py to use real routes and stops.</div></div><span class="tag rain">Demo</span></div>
          <button class="primary" id="busKeyless" style="margin-top:10px">Use real bus routes (no key needed)</button>
          <div class="meta" style="margin-top:4px">Downloads LTA bus stops and routes republished by BusRouter SG. Arrival times stay simulated.</div>`}
@@ -1394,9 +1396,14 @@ function realStopBoard(stopName, code){
   }
   return {stop: stopName, code, road: st.road, real:true, list};
 }
-const busTag = () => S.offline ? "Offline · scheduled" : BUSDATA ? "Real routes · simulated times" : "Live · simulated";
+const busTag = () => S.offline ? "Offline · scheduled"
+  : BUSDATA ? (dataMode() === "live" ? "Real routes · LTA times" : "Real routes · simulated times")
+  : "Simulated routes and times";
 const busNote = () => BUSDATA
-  ? `Bus routes and stops: ${esc(BUSDATA.attribution || "LTA DataMall")} (data from ${esc(BUSDATA.generated || "your download")}). Arrival times, crowding and fares are simulated; live times need LTA's Bus Arrival API.`
+  ? `Bus routes and stops: ${esc(BUSDATA.attribution || "LTA DataMall")} (data from ${esc(BUSDATA.generated || "your download")}). `
+    + (dataMode() === "live"
+       ? "Arrival times and bus loads come from LTA's Bus Arrival API; fares are estimated."
+       : "Arrival times, crowding and fares are simulated; live times need a DataMall key and the backend.")
   : "Bus services, stops and arrival times are simulated for this prototype. A real app would use LTA DataMall's live Bus Arrival data.";
 
 /* ---------- Added: real bus routes without an LTA key (LTA data republished by BusRouter SG, cheeaun/sgbusdata) ---------- */
