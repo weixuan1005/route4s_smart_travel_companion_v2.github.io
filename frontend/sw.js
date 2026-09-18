@@ -7,8 +7,15 @@
  * journey stays readable underground, and anything from the network carries the time it was
  * fetched so the app can say how old it is rather than passing stale data off as live.
  *
- *   app shell (HTML, vendor JS and CSS, bus and shelter data)
- *       cache first, then network. These change only when the app is deployed.
+ *   index.html (the whole app)
+ *       network first with a short timeout, falling back to the cache. It was cache-first,
+ *       which meant a deployed change stayed invisible until someone remembered to bump
+ *       CACHE below - a returning phone kept running the old app. Offline still works: the
+ *       fallback is the same cached copy as before.
+ *
+ *   vendor JS and CSS, bus and shelter data
+ *       cache first for an instant open, then refreshed in the background, so a stale file
+ *       heals itself on the next visit instead of living until the next cache bump.
  *
  *   /api/* (alerts, crowding, weather, arrivals, planned works)
  *       network first with a 6 second timeout, falling back to the last good response.
@@ -19,12 +26,13 @@
  *       the Cache API does not serve usefully; caching it would blow the storage quota for
  *       no benefit. Underground the map keeps whatever tiles the page already holds.
  *
- * Bump CACHE when the shell changes: install pre-caches the new one and activate deletes
- * every older cache, so a stale shell cannot outlive a deploy.
+ * Bumping CACHE still clears everything older on activate, but nothing depends on my
+ * remembering to do it any more.
  */
-const CACHE = "stc-shell-v2";
+const CACHE = "stc-shell-v3";
 const DATA_CACHE = "stc-api-v2";
 const API_TIMEOUT = 6000;
+const SHELL_TIMEOUT = 3000;
 
 /* Relative so this works both at the site root and under /frontend/ on project Pages. */
 const SHELL = [
@@ -57,6 +65,9 @@ self.addEventListener("activate", event => {
 
 const isApi = url => url.pathname.includes("/api/");
 const isMap = url => url.pathname.endsWith(".pmtiles");
+/* The app itself: a navigation, or index.html asked for by name. */
+const isAppDoc = (url, request) =>
+  request.mode === "navigate" || url.pathname.endsWith("/") || url.pathname.endsWith("/index.html");
 
 /* A cached API answer is still useful underground, but the app must be able to say how old it
    is, so the age rides along in a header the page can read. */
@@ -91,12 +102,40 @@ async function networkFirst(request) {
   }
 }
 
+/* The app itself. Fresh when there is a network, the last deploy when there is not. Without
+   this a phone that has opened the app once keeps running that version for ever. */
+async function appDoc(request) {
+  const cache = await caches.open(CACHE);
+  try {
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), SHELL_TIMEOUT);
+    /* reload, not default: the browser's own HTTP cache would otherwise hand back the same
+       stale page this function exists to get past. */
+    const fresh = await fetch(request, {signal: controller.signal, cache: "reload"});
+    clearTimeout(timer);
+    if (!fresh.ok) throw new Error("HTTP " + fresh.status);
+    /* Under both names install used. "/" and "/index.html" are separate cache entries, and
+       leaving the other one behind keeps a stale copy alive to be served offline later. */
+    await Promise.all([request, "./", "./index.html"].map(k => cache.put(k, fresh.clone())));
+    return fresh;
+  } catch (e) {
+    const cached = await cache.match(request) || await cache.match("./index.html") || await cache.match("./");
+    if (cached) return cached;
+    throw e;
+  }
+}
+
+/* Everything else in the shell: answer from cache at once, then quietly replace it, so a file
+   that changed in a deploy is right on the next visit rather than at the next cache bump. */
 async function cacheFirst(request) {
-  const cached = await caches.match(request);
-  if (cached) return cached;
-  const fresh = await fetch(request);
-  if (fresh.ok && request.method === "GET") (await caches.open(CACHE)).put(request, fresh.clone());
-  return fresh;
+  const cache = await caches.open(CACHE);
+  const cached = await cache.match(request);
+  const network = fetch(request).then(fresh => {
+    if (fresh.ok) cache.put(request, fresh.clone());
+    return fresh;
+  });
+  if (cached) { network.catch(() => {}); return cached; }
+  return network;
 }
 
 self.addEventListener("fetch", event => {
@@ -105,5 +144,6 @@ self.addEventListener("fetch", event => {
   const url = new URL(request.url);
   if (url.origin !== self.location.origin) return;   /* leave third parties alone */
   if (isMap(url)) return;                            /* range requests: straight to the network */
-  event.respondWith(isApi(url) ? networkFirst(request) : cacheFirst(request));
+  if (isApi(url)) return event.respondWith(networkFirst(request));
+  event.respondWith(isAppDoc(url, request) ? appDoc(request) : cacheFirst(request));
 });
