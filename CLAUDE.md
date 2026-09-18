@@ -117,8 +117,11 @@ Next:
 
 ## Unverified, needs a real run
 
-- Real DataMall responses: the crowd **forecast** shape and the `FreeMRTShuttle` route text
-  are my best understanding, not copied from LTA samples. `tools/check_live.py` prints both.
+- Real DataMall responses: the crowd **forecast** shape is confirmed - a live `PCDForecast`
+  answered with station rows keyed `['Interval', 'Station']`, which is what `/api/crowd`
+  reads. The `FreeMRTShuttle` route text is still a guess: checking it needs a real
+  disruption, and the feed reported `Status=1` with no affected segments.
+  `tools/check_live.py` prints both.
 - Cloud Run deploy is no longer unverified: `gcloud run deploy --source . --region
   asia-southeast1 --set-secrets LTA_ACCOUNT_KEY=lta-key:latest` was run on a real Mac and
   reached "has been deployed and is serving 100 percent of traffic", so the Dockerfile

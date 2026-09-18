@@ -165,9 +165,10 @@ device** in Settings removes it. The DataMall key lives in `.env`, is git-ignore
 
 ## 7. Limits we know about
 
-1. **Not verified against real DataMall responses.** The `PCDForecast` station/interval
-   shape and the `FreeMRTShuttle` route text are our reading of the guide, not copies of live
-   samples. `tools/check_live.py` prints both so they can be checked with a key.
+1. **`FreeMRTShuttle` route text is unverified.** It is our reading of the guide rather than
+   a copy of a live sample, and checking it needs a real disruption to be running. The
+   `PCDForecast` station/interval shape *was* a guess and is now confirmed against a live
+   response (station rows keyed `Interval` and `Station`). `tools/check_live.py` prints both.
 2. **The planned-events field names are defensive guesses.** Each endpoint names its columns
    differently; we read through a list of candidate names and keep anything unrecognised
    under `raw` so a real response can be inspected. A renamed column loses that field rather
