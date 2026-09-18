@@ -89,7 +89,12 @@ One IIFE in `index.html`. Key parts, in order:
   wherever it appears (cycling to the LRT is the journey), walking only when it is the
   whole trip, or the filter would match everything.
 - `S` is the single state object; `render()` redraws the active tab; `tick()` runs the
-  simulated trip every 120 ms.
+  simulated trip every 120 ms. `S.clockMin` is the device clock between trips (a 1 s
+  interval keeps it moving, since `tick()` returns early when idle) and the simulation's
+  own clock during one, because every ETA on screen is derived from it. `fmt()` wraps to
+  00:00-23:59, so a trip running past midnight reads 01:00 rather than 25:00.
+- `samePlace()` is 50 m; `computeOptions()` returns no options when start and destination
+  are the same, and the trip panel says so instead of offering a nought-minute walk.
 
 ## Status
 
