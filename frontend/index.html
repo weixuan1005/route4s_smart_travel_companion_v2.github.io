@@ -233,6 +233,12 @@ input[type=range]{width:100%;accent-color:var(--route)}
 .wst li.next{color:#fff;font-weight:700}
 .wst li.next i{background:#fff;border-color:#fff}
 .wtitle{font-size:.7rem;color:#A7B0C4;margin-bottom:2px}
+.wmap{flex:1;min-height:96px;border-radius:14px;overflow:hidden;background:#111827}
+.wmap .leaflet-control-attribution{font-size:7px;padding:0 3px;background:rgba(0,0,0,.55);color:#cbd5e1}
+.wmap .leaflet-control-attribution a{color:#93b4fd}
+.wnav{display:flex;gap:6px;align-items:center;margin-bottom:4px}
+.wnav b{font-size:.78rem;line-height:1.15}
+.wnav .warrow{width:26px;height:26px;border-radius:9px;font-size:.8rem;flex:none}
 .jscroll{overflow:auto;max-height:340px;overscroll-behavior:contain;cursor:grab}
 .jscroll.dragging{cursor:grabbing}
 .jexpand{top:10px;bottom:auto;z-index:2}
@@ -2078,10 +2084,15 @@ const walkIcon = () => `<svg viewBox="0 0 24 24" fill="none" stroke="#fff" strok
 const trainIcon = () => `<svg viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2.2" stroke-linecap="round"><rect x="5" y="3" width="14" height="14" rx="3"/><path d="M5 11h14M8 21l2-4M16 21l-2-4"/></svg>`;
 
 /* ---------- Watch ---------- */
+let watchLeg = null;
 function renderWatch(){
   const real = $("#wbody"), tmp = {innerHTML:""};
+  watchLeg = null;
   buildWatch(tmp);
   if (real.dataset.h !== tmp.innerHTML){ real.innerHTML = tmp.innerHTML; real.dataset.h = tmp.innerHTML; bindWatch(); }
+  /* The body is replaced whenever it changes, so the map element has to be put back and
+     re-aimed each time; doing it here keeps that in one place. */
+  if (watchLeg) mountWatchMap(watchLeg.leg, watchLeg.pos, watchLeg.stop);
 }
 function buildWatch(b){
   const w = $("#wscreen"), dots = $("#wdots");
@@ -2171,7 +2182,14 @@ function buildWatch(b){
       const mark = p.role==="transfer" ? " ⇄" : p.role==="alight" ? " ⏏" : "";
       return `<li class="${cls}" style="--c:${c}"><i></i>${esc(p.station)}${mark}</li>`;
     }).join("")}</ul>`;
+  } else if (hasLeaflet()){
+    /* Navigation: what to do next, over a map centred on where you are. */
+    b.innerHTML = `<div class="wnav"><div class="warrow" style="background:${n.color}">${kindIcon(n.kind)}</div>
+        <b>${esc(n.title)}</b></div>
+      <div class="wtitle">${esc(stop.short)} · ${remaining} min</div>
+      <div data-watch-map style="flex:1;display:flex"></div>`;
   } else {
+    /* No Leaflet: the same leg as plain geometry, which still shows the shape of the journey. */
     const xs = leg.points.map(p => p.x), ys = leg.points.map(p => p.y);
     const minX = Math.min(...xs)-14, minY = Math.min(...ys)-14;
     const wv = Math.max(Math.max(...xs)-minX+14, 60), hv = Math.max(Math.max(...ys)-minY+14, 60);
@@ -2186,6 +2204,60 @@ function buildWatch(b){
         <circle cx="${pos.x}" cy="${pos.y}" r="${r}" fill="#fff"/>
       </svg>`;
   }
+  if (S.watchPage === 2) watchLeg = {leg, pos, stop};
+}
+
+/* ---------- The watch map ----------
+   A second Leaflet instance, small and followed rather than fitted: on a wrist you want the
+   next hundred metres, not the whole journey. It is kept in a detached element and moved back
+   into the screen after every render, because the watch redraws each tick and innerHTML would
+   otherwise destroy the map. The OpenStreetMap credit is shown here too - the licence asks for
+   it wherever the map appears, including a 200px mock. */
+let WMAP = null;
+const WATCH_ZOOM = 15;
+
+function watchMapInit(){
+  if (WMAP || !hasLeaflet()) return WMAP;
+  const el = document.createElement("div");
+  el.className = "wmap"; el.setAttribute("role", "img");
+  el.setAttribute("aria-label", "Map of the next part of your journey");
+  const map = L.map(el, {zoomControl:false, attributionControl:true, dragging:false, keyboard:false,
+    scrollWheelZoom:false, doubleClickZoom:false, boxZoom:false, touchZoom:false, preferCanvas:true})
+    .setView([1.3521, 103.8198], WATCH_ZOOM);
+  map.attributionControl.setPrefix(false);
+  WMAP = {map, el, base:null, layer:L.layerGroup().addTo(map), tiles:false};
+  /* Same offline basemap as the phone. Without it the lines still draw on a plain background. */
+  mapFile().then(head => {
+    if (!head || typeof protomapsL === "undefined") { map.attributionControl.addAttribution(OSM_ATTRIB); return; }
+    WMAP.base = protomapsL.leafletLayer({url: MAP_FILE, flavor: "dark", lang: "en",
+      attribution: OSM_ATTRIB, maxDataZoom: Math.min(15, MAPINFO.maxZoom || 15)}).addTo(map);
+    WMAP.tiles = true;
+  });
+  return WMAP;
+}
+
+/* Put the map back in the watch after a render, and point it at where you are now. */
+function mountWatchMap(leg, pos, stop){
+  const slot = document.querySelector("[data-watch-map]");
+  if (!slot || !watchMapInit()) return;
+  slot.appendChild(WMAP.el);
+  requestAnimationFrame(() => {
+    WMAP.map.invalidateSize();
+    const here = toLL(pos.x, pos.y);
+    WMAP.map.setView(here, WATCH_ZOOM, {animate: false});
+    const g = WMAP.layer; g.clearLayers();
+    /* The leg itself, walking legs dotted as they are on the phone. */
+    leg.points.slice(0, -1).forEach((a, i) => {
+      const b = leg.points[i + 1];
+      L.polyline([toLL(a.x, a.y), toLL(b.x, b.y)],
+        {color: edgeColor(leg, i), weight: a.departSeg < 0 ? 4 : 6,
+         dashArray: a.departSeg < 0 ? "2 7" : null, lineCap:"round", interactive:false}).addTo(g);
+    });
+    L.circleMarker(toLL(stop.x, stop.y), {radius:5, color:"#fff", weight:2,
+      fillColor:"#EE6A6A", fillOpacity:1, interactive:false}).addTo(g);
+    L.circleMarker(here, {radius:6, color:"#fff", weight:3,
+      fillColor:"#5B95F0", fillOpacity:1, interactive:false}).addTo(g);
+  });
 }
 
 function buzzWatch(){
@@ -2619,6 +2691,8 @@ function mapFile(){
       const total = /\/(\d+)\s*$/.exec(r.headers.get("Content-Range") || "");
       const buf = new Uint8Array(await r.arrayBuffer());
       MAPINFO.bytes = total ? +total[1] : buf.length;
+      /* PMTiles v3: byte 101 is the highest zoom in the file. Both maps need it. */
+      MAPINFO.maxZoom = String.fromCharCode(...buf.slice(0, 7)) === "PMTiles" && buf.length > 101 ? buf[101] : 15;
       MAPINFO.state = "ok";
       return buf;
     } catch (e) {

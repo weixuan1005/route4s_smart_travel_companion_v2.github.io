@@ -102,7 +102,9 @@ offline support (`frontend/sw.js`: shell cache-first, `/api/*` network-first wit
 time stamped so the UI can say "showing conditions saved at HH:MM"; the pmtiles map is
 deliberately not cached), sheltered walkways (OpenStreetMap
 `covered=yes` paths via `tools/get_covered.py` -> `frontend/covered.json`, drawn on the map
-and measured per walking leg).
+and measured per walking leg), watch navigation (page 2 of the watch is a second Leaflet
+instance, `WMAP`/`mountWatchMap()`, re-parented after each `renderWatch()`; the old schematic
+SVG stays as the fallback when Leaflet is missing).
 
 Next:
 1. **Accessibility pass** — contrast, text size, screen-reader labels, sunlight readability.
