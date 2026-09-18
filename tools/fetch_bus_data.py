@@ -95,6 +95,44 @@ def _freq(svc):
     return ""
 
 
+def _hhmm(v):
+    """DataMall writes first/last bus as "0530" or "2400"; blanks and dashes mean unknown."""
+    t = str(v or "").strip()
+    if len(t) != 4 or not t.isdigit():
+        return None
+    h, m = int(t[:2]), int(t[2:])
+    if h > 28 or m > 59:            # 24xx and 25xx are normal here; 30xx is not
+        return None
+    return f"{h:02d}:{m:02d}"
+
+
+def _service_hours(routes_raw):
+    """First and last bus per service direction, taken at its first stop.
+
+    BusRoutes carries these on every stop of the route. The one that answers "can I still
+    catch this service?" for someone starting a journey is the origin's, so that is the row
+    kept - the earliest StopSequence. It is an approximation further along the route, and the
+    app says so rather than implying a per-stop timetable it does not have.
+    """
+    best = {}
+    for r in routes_raw:
+        key = f"{str(r.get('ServiceNo', '')).strip()}|{r.get('Direction', 1)}"
+        try:
+            seq = int(r.get("StopSequence") or 0)
+        except (TypeError, ValueError):
+            continue
+        if key in best and best[key][0] <= seq:
+            continue
+        hours = {}
+        for day, prefix in (("wd", "WD"), ("sat", "SAT"), ("sun", "SUN")):
+            first = _hhmm(r.get(f"{prefix}_FirstBus"))
+            last = _hhmm(r.get(f"{prefix}_LastBus"))
+            if first and last:
+                hours[day] = [first, last]
+        best[key] = (seq, hours)
+    return {k: v[1] for k, v in best.items() if v[1]}
+
+
 def build(stops_raw, routes_raw, services_raw):
     """Turn raw DataMall records into the compact format used by the app."""
     stops = {}
@@ -134,11 +172,13 @@ def build(stops_raw, routes_raw, services_raw):
         if len(codes) >= 2:
             routes[key] = [codes, dists]
 
+    hours = _service_hours(routes_raw)
     services = {}
     for s in services_raw:
         key = f"{str(s.get('ServiceNo', '')).strip()}|{s.get('Direction', 1)}"
         if key in routes:
-            services[key] = [s.get("Operator", ""), s.get("Category", ""), _freq(s), (s.get("LoopDesc") or "").strip()]
+            services[key] = [s.get("Operator", ""), s.get("Category", ""), _freq(s),
+                             (s.get("LoopDesc") or "").strip(), hours.get(key) or None]
 
     return {
         "version": 1,
@@ -241,8 +281,13 @@ def main():
     text = json.dumps(data, separators=(",", ":"), ensure_ascii=False)
     with open(args.out, "w", encoding="utf-8") as f:
         f.write(text)
+    with_hours = sum(1 for v in data.get("services", {}).values() if len(v) > 4 and v[4])
     print(f"Wrote {args.out}: {len(data['stops'])} stops, {len(data['routes'])} service directions, "
           f"{len(text) / 1e6:.1f} MB")
+    if with_hours:
+        print(f"  first/last bus times for {with_hours} service directions")
+    else:
+        print("  no first/last bus times in this source: the app will not filter buses by hour")
     if args.embed:
         embed(args.embed, text)
     print("Done. Upload busdata.json (and index.html) to your GitHub repo.")

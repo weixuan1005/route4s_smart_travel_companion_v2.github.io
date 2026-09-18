@@ -623,6 +623,8 @@ can still switch to test data there, for a repeatable demo.
 | Waiting for a train | 3 min | 1–5 min |
 | Changing lines | 4 min | 3–6 min |
 | Bus | route from bus data; wait from (simulated) arrival times; ride about 19 km/h plus stops | wait up to the next bus, ride −15% to +25% |
+| Train service hours | **assumed 05:30–00:30.** LTA does not publish first/last train through DataMall, so this is our figure, not theirs | trips outside it are not offered |
+| Bus service hours | real, from DataMall `BusRoutes` (first/last bus per service, weekday/Sat/Sun), taken at each service's first stop | a service that has stopped is not offered |
 | Fare | one distance fare for the whole journey. From `frontend/fares.json` if a table is installed; otherwise our own estimate, `S$1.09 + S$0.055/km`, capped at `S$2.50` | tagged **Fare estimated** |
 
 Options are ranked for Arjun by: middle of the time range + 5 min per change + half the range
@@ -631,6 +633,31 @@ width + 4 min for buses, plus today's conditions: +12 for cycling into rain at t
 The morning check adds 0.15 per minute of later departure, so it only moves Arjun later
 when that clearly helps. So a slightly slower trip with fewer changes and a narrower range can
 rank first. These are stated assumptions, not measured values.
+
+### Service hours
+
+A route that has stopped for the night is not offered. Ask for a trip at 03:10 and the app
+says *"Nothing is running at 03:10"* rather than planning a journey you cannot take.
+
+**Buses are real.** DataMall's `BusRoutes` carries first and last bus per service for
+weekdays, Saturdays and Sundays. `tools/fetch_bus_data.py` keeps the row at each service's
+first stop — the one that answers *can I still catch this?* for someone starting a journey.
+It is an approximation further along the route.
+
+This needs a DataMall key. The no-key BusRouter SG download has no timetable in it, so
+**rebuild the bus data with your key** to get bus filtering:
+
+```bash
+python3 tools/fetch_bus_data.py --key YOUR_KEY --out frontend/busdata.json
+```
+
+**Settings → Bus data** says which of the two you have. Without the times, buses are never
+hidden — suppressing a route because we lack its timetable would be worse than showing one.
+
+**Trains are an assumption.** LTA does not publish first and last train through DataMall, and
+exact train timings are not public. The app assumes **05:30–00:30** and says so on screen
+whenever it acts on it. Per-station first/last train would be the upgrade; it is not in
+DataMall, so it needs a different source.
 
 ### Real fares
 

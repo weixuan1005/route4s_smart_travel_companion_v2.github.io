@@ -1189,6 +1189,9 @@ function viewSettings(){
          <div class="meta" style="margin-top:4px">Downloads LTA bus stops and routes republished by BusRouter SG. Arrival times stay simulated.</div>`}
     <div class="btns" style="margin-top:10px">
       <label class="ghost" style="cursor:pointer">Load bus data file<input type="file" id="busFile" accept=".json,application/json" hidden></label>
+      ${BUSDATA ? `<div class="meta" style="margin-top:6px">${busHoursKnown()
+        ? "First and last bus times included, so buses that have stopped for the night are not offered."
+        : "No first/last bus times in this file. Rebuild it with <code>tools/fetch_bus_data.py --key YOUR_KEY</code> to have buses hidden outside their operating hours."}</div>` : ""}
       ${BUSDATA && BUSDATA.source !== "embedded" && BUSDATA.source !== "busdata.json" ? `<button class="ghost" id="busClear">Use simulated buses</button>` : ""}
     </div>
   </div>
@@ -1352,7 +1355,8 @@ function initBusData(raw, source){
     const info = (raw.services || {})[key] || [];
     const fm = String(info[2] || "").match(/(\d+)(?:-(\d+))?/);
     const gap = fm ? Math.max(3, Math.round((+fm[1] + +(fm[2] || fm[1]))/2)) : 10;
-    const rt = {svc, dir, codes, dists, gap, op:info[0] || "", dest: stops.get(codes[codes.length-1]).name};
+    const rt = {svc, dir, codes, dists, gap, op:info[0] || "", hours: info[4] || null,
+                dest: stops.get(codes[codes.length-1]).name};
     routes.push(rt);
     codes.forEach((c, i) => stops.get(c).svcs.push([rt, i]));
   }
@@ -1421,7 +1425,7 @@ function realBusOptions(a, b, seedKey){
   return [...found.values()].sort((x, y) => x.t - y.t).slice(0, 3).map(f => {
     const legs = f.legs.map(({rt, i, j}) => {
       const s0 = D.stops.get(rt.codes[i]), s1 = D.stops.get(rt.codes[j]);
-      return {svc:rt.svc, dir:rt.dir, dest:rt.dest, board:s0.name, alight:s1.name, boardCode:s0.code, alightCode:s1.code,
+      return {svc:rt.svc, dir:rt.dir, dest:rt.dest, hours:rt.hours, board:s0.name, alight:s1.name, boardCode:s0.code, alightCode:s1.code,
         stops:j-i, ride:Math.round(busRideMin(segKm(rt, i, j), j-i)), km:+segKm(rt, i, j).toFixed(1),
         codes:rt.codes.slice(i+1, j+1), boardXY:{x:s0.x, y:s0.y}, alightXY:{x:s1.x, y:s1.y}, gap:rt.gap};
     });
@@ -1476,6 +1480,39 @@ function initCovered(raw){
   COVERED = {ways, grid, generated: raw.generated || "", source: raw.source || "OpenStreetMap",
              attribution: raw.attribution || "© OpenStreetMap contributors"};
 }
+
+/* ---------- Service hours ----------
+   Buses: real. DataMall's BusRoutes carries first and last bus per service for weekdays,
+   Saturdays and Sundays, and tools/fetch_bus_data.py keeps the row at each service's first
+   stop - the one that answers "can I still catch this?" for someone starting a journey. It
+   is an approximation further down the route, and busdata.json built without a key (the
+   BusRouter SG source) has none at all.
+
+   Trains: LTA does not publish first and last train through DataMall, so RAIL_HOURS below is
+   a stated assumption rather than data, and the app says as much wherever it acts on it.
+
+   Unknown hours never hide anything. Suppressing a route because we lack its timetable would
+   be a worse failure than showing one that has stopped.
+*/
+const RAIL_HOURS = [5*60 + 30, 24*60 + 30];          /* 05:30 - 00:30, assumed, not from LTA */
+const RAIL_HOURS_NOTE = "05:30-00:30 (assumed: LTA does not publish train hours in DataMall)";
+const hhmmMin = t => { const m = /^(\d{1,2}):(\d{2})$/.exec(String(t || "").trim()); return m ? +m[1]*60 + +m[2] : null; };
+const dayKey = () => ["sun","wd","wd","wd","wd","wd","sat"][new Date().getDay()];
+
+/* Inside [first, last]? A window ending after midnight - last before first, or a 24:xx time,
+   both of which DataMall uses - runs into the next day, so the minute is tried a day on too. */
+function withinHours(minute, first, last){
+  if (first === null || last === null) return null;
+  const end = last < first ? last + 1440 : last;
+  return (minute >= first && minute <= end) || (minute + 1440 >= first && minute + 1440 <= end);
+}
+/* true, false, or null for "no timetable for this service". */
+const svcRunsAt = (h, minute) => {
+  const d = h && h[dayKey()];
+  return d ? withinHours(minute, hhmmMin(d[0]), hhmmMin(d[1])) : null;
+};
+const railRunsAt = minute => withinHours(minute, RAIL_HOURS[0], RAIL_HOURS[1]);
+const busHoursKnown = () => !!(BUSDATA && BUSDATA.routes.some(rt => rt.hours));
 
 /* ---------- Fares ----------
    Singapore charges by distance across a whole journey, not per stop and not per leg: a bus
@@ -3213,6 +3250,17 @@ async function computeOptions(p, opt){
       }
     }));
   }
+  /* Anything that has stopped running for the night, on the day being planned for. Walking
+     and cycling always run; unknown hours are left alone. */
+  for (let i = options.length - 1; i >= 0; i--){
+    const op = options[i];
+    if (op.kind === "walk" || op.kind === "cycle") continue;
+    const stopped = op.kind === "bus"
+      ? ((op.busOpt && op.busOpt.legs) || []).some(l => svcRunsAt(l.hours, op.depart) === false)
+      : railRunsAt(op.depart) === false;
+    if (stopped) options.splice(i, 1);
+  }
+
   /* One fare for the whole journey, on the total ridden distance - not a sum of per-leg
      prices, which is not how a through fare works. */
   options.forEach(op => { op.fare = fareFor(journeyKm(op)); });
@@ -3357,6 +3405,9 @@ function viewTrip(){
   const whenChip = (k, l) => `<button class="chip" data-when="${k}" aria-pressed="${T.when === k}">${l}</button>`;
   let results = "";
   if (T.loading) results = `<div class="panel"><div class="meta">Finding routes…</div></div>`;
+  else if (T.results && !T.results.length && railRunsAt(T.when === "now" ? nowMin() : parseHM(T.time)) === false)
+    results = `<div class="panel"><b>Nothing is running at ${hm(T.when === "now" ? nowMin() : parseHM(T.time))}.</b>
+      <div class="meta">Trains run about ${esc(RAIL_HOURS_NOTE)}${busHoursKnown() ? ", and no bus on this route is running either" : ""}. Try a time inside those hours.</div></div>`;
   else if (T.results && !T.results.length) results = samePlace(T.from, T.to)
     ? `<div class="panel"><b>You're already there.</b><div class="meta">${esc(T.from.name)} is both the start and the destination. Pick somewhere else to go.</div></div>`
     : `<div class="panel"><b>No route found.</b><div class="meta">Try another start or destination.</div></div>`;

@@ -96,6 +96,12 @@ One IIFE in `index.html`. Key parts, in order:
   00:00-23:59, so a trip running past midnight reads 01:00 rather than 25:00.
 - `samePlace()` is 50 m; `computeOptions()` returns no options when start and destination
   are the same, and the trip panel says so instead of offering a nought-minute walk.
+- Service hours: `svcRunsAt()` for buses (real, from DataMall `BusRoutes` first/last, carried
+  in `busdata.json` `services[key][4]`; absent from the no-key BusRouter SG build) and
+  `railRunsAt()` for trains (`RAIL_HOURS`, 05:30-00:30, an assumption - LTA publishes no train
+  timetable through DataMall). `computeOptions()` drops what has stopped; unknown hours never
+  hide anything. `withinHours()` handles windows ending after midnight, including DataMall's
+  24:xx times.
 - Fares: `fareFor(km)` is the only place a price is decided, and it takes the whole
   journey's ridden distance (`journeyKm()`), because Singapore charges one distance fare per
   journey with transfers included - it used to be `1.09 + stops*0.1` in four places. Real
