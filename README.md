@@ -8,6 +8,13 @@ Built for the **LTA Smart Mobility Hackathon, Problem Statement 2**, around one 
 **Arjun**, who travels Punggol → one-north, cycles to the LRT, and would rather leave twenty
 minutes later than stand in a crush.
 
+It plans a day out as well as a commute. **Timmy** is visiting Singapore: he sets a budget and
+the hours he has free, picks what he's after — food, culture, nature, shopping, photos — and
+names any must-see spots, including the area around any MRT station. The app builds an ordered
+day that fits both the budget and the clock, routes between the stops on the same rail and bus
+graph the commute uses, keeps outdoor stops out of the afternoon rain window, puts lunch at
+lunchtime, and tells him what it couldn't fit in and why.
+
 ---
 
 ## Quickest look: no installing anything
