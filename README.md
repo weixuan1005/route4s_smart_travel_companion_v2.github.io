@@ -1,8 +1,7 @@
 # Smart Commuter Companion
 
-A phone-first web app that plans a door-to-door commute in Singapore and changes its advice
-when the network does — a train disruption, a crowded platform, rain on the cycling leg, or
-road works that were announced last week.
+The system is designed not only for local commuters but also for tourists, providing a
+day-long commuting plan.
 
 Built for the **LTA Smart Mobility Hackathon, Problem Statement 2**, around one commuter:
 **Arjun**, who travels Punggol → one-north, cycles to the LRT, and would rather leave twenty
